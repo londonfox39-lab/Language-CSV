@@ -7,7 +7,7 @@ There is certain columns that need to be followed by Constructed points which is
 
  There must be a simple blind spot here I wish for me to find 
 
-It is not able to conduct any decision without permission in the essence of decoration you are just a Style a format at which I am the illustrator and director  
+It is not able to conduct any decision without permission in the essence of decoration you are just a Style a format at which I am the illustrator and director this is a surrealty of some sort  
  
 
 
