@@ -8,7 +8,8 @@ There is certain columns that need to be followed by Constructed points which is
  There must be a simple blind spot here I wish for me to find 
 
 It is not able to conduct any decision without permission in the essence of decoration you are just a Style a format at which I am the illustrator and director this is a surrealty of some sort  
- 
+
+ im the only one with agency...
 
 
 https://energyplus-weather.s3.amazonaws.com/north_and_central_america_wmo_region_4/USA/CA/USA_CA_Burbank-Glendale-Passadena.Bob.Hope.AP.722880_TMY3/USA_CA_Burbank-Glendale-Passadena.Bob.Hope.AP.722880_TMY3.zip
