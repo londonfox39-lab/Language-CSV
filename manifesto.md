@@ -12,6 +12,7 @@ It is not able to conduct any decision without permission in the essence of deco
  im the only one with agency...
 
 
+
 https://energyplus-weather.s3.amazonaws.com/north_and_central_america_wmo_region_4/USA/CA/USA_CA_Burbank-Glendale-Passadena.Bob.Hope.AP.722880_TMY3/USA_CA_Burbank-Glendale-Passadena.Bob.Hope.AP.722880_TMY3.zip
 
 
@@ -35,9 +36,10 @@ https://energyplus-weather.s3.amazonaws.com/north_and_central_america_wmo_region
 ##### ENVIRONMENTAL BEHAVIOR  
 
 
+GRASSHOPPER IS THE DOMAIN SO IS BLENDER 
 
-###### CONTRADICTION / IRONY  
+CONTRADICTION / IRONY  
 
 
 
-###### CARE / ETHICS
+CARE / ETHICS
