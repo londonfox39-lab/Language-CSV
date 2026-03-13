@@ -99,7 +99,7 @@
 	<div id="app"></div>
 	<div class="hud">
 		<div class="title">Wrapped Gift Terrain — Bird Flyover</div>
-			<div class="subtitle">JSON-driven cinematic camera, typographic floor carving, and a tessellated camo host terrain for direct WebM export.</div>
+			<div class="subtitle">JSON-driven cinematic camera with a Christmas wrap floor: ribbons, woven paper texture, and typographic carving for direct WebM export.</div>
 		<div class="buttons">
 			<button id="toggleFlight">Pause Flight</button>
 			<button id="recordBtn">Record 16s WebM</button>
@@ -140,15 +140,24 @@
 				"tessellationStrength": 0.95,
 				"glyphScale": 7.2,
 				"glyphCarveStrength": 0.75,
+				"ribbonWidth": 0.11,
+				"ribbonSoftness": 0.05,
+				"panelFrequency": 1.2,
 				"colors": {
-					"baseA": "#c9beac",
-					"baseB": "#8e7b72",
-					"plaidA": "#5f4d1f",
-					"plaidB": "#7a6540",
-					"plaidC": "#d1c6b3",
+					"baseA": "#e8ddca",
+					"baseB": "#b3a38f",
+					"plaidA": "#8a0e12",
+					"plaidB": "#cc1a16",
+					"plaidC": "#f0dcc7",
 					"camoA": "#322a22",
-					"camoB": "#7a684d",
+					"camoB": "#685940",
 					"camoC": "#bfb3a0"
+					,
+					"wrapRed": "#d90f0f",
+					"wrapGreen": "#b9d6c3",
+					"ribbon": "#3c2611",
+					"paperLight": "#f6ead8",
+					"paperShadow": "#967e69"
 				}
 			},
 			"camera": {
@@ -193,6 +202,7 @@
 		const recordBtn = document.getElementById('recordBtn');
 
 		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+		const frac = (v) => v - Math.floor(v);
 		const lerp = (a, b, t) => a + (b - a) * t;
 		const smooth = (t) => t * t * (3 - 2 * t);
 		const smoothstep = (a, b, x) => {
@@ -294,6 +304,14 @@
 			return { r: c.r, g: c.g, b: c.b };
 		}
 
+		function mixObjColor(a, b, t) {
+			return {
+				r: lerp(a.r, b.r, t),
+				g: lerp(a.g, b.g, t),
+				b: lerp(a.b, b.b, t)
+			};
+		}
+
 		function cellPoint(noise, gx, gy) {
 			return {
 				x: gx + noise.hash(gx + 17, gy + 29),
@@ -330,16 +348,37 @@
 			const cellEdge = 1 - smoothstep(0, terrain.tessellationEdge || 0.12, edgeDelta);
 			const warpedU = u + noise.fbm(u * 3.2, v * 3.2, 3) * 0.055;
 			const warpedV = v + noise.fbm(v * 3.1, u * 3.1, 3) * 0.055;
+			const ribbonWidth = terrain.ribbonWidth || 0.1;
+			const ribbonSoftness = terrain.ribbonSoftness || 0.05;
+			const ribbonVertical = 1 - smoothstep(
+				ribbonWidth,
+				ribbonWidth + ribbonSoftness,
+				Math.abs(frac(warpedU * 2.0) - 0.5)
+			);
+			const ribbonHorizontal = 1 - smoothstep(
+				ribbonWidth,
+				ribbonWidth + ribbonSoftness,
+				Math.abs(frac(warpedV * 2.0) - 0.5)
+			);
+			const ribbonMask = clamp(Math.max(ribbonVertical, ribbonHorizontal), 0, 1);
+			const panelField = 0.5 + 0.5 * Math.sin((warpedU * (terrain.panelFrequency || 1.2)) * Math.PI * 2);
+			const panelMix = smoothstep(0.32, 0.68, panelField);
 			const glyphScale = terrain.glyphScale || 7;
 			const bandA = Math.abs(Math.sin((warpedU * glyphScale) * Math.PI));
 			const bandB = Math.abs(Math.sin(((warpedV + warpedU * 0.28) * glyphScale * 0.72) * Math.PI));
 			const notch = 0.5 + 0.5 * noise.fbm(warpedU * 9.5, warpedV * 9.5, 3);
 			const glyphMask = Math.pow(1 - bandA, 3.2) * 0.7 + Math.pow(1 - bandB, 4.5) * 0.5;
 			const glyphVoid = clamp(glyphMask * smoothstep(0.34, 0.76, notch), 0, 1);
+			const weaveX = 1 - smoothstep(0.12, 0.34, Math.abs(frac(u * 150) - 0.5));
+			const weaveY = 1 - smoothstep(0.12, 0.34, Math.abs(frac(v * 150) - 0.5));
+			const weaveMask = clamp((weaveX * 0.55 + weaveY * 0.45) * 0.7, 0, 1);
 
 			return {
 				cellEdge,
 				glyphVoid,
+				ribbonMask,
+				panelMix,
+				weaveMask,
 				booleanCut: clamp(
 					cellEdge * (terrain.tessellationStrength || 1) * 0.68 +
 					glyphVoid * (terrain.glyphCarveStrength || 0.7),
@@ -359,7 +398,8 @@
 			const {
 				baseA, baseB,
 				plaidA, plaidB, plaidC,
-				camoA, camoB, camoC
+				camoA, camoB, camoC,
+				wrapRed, wrapGreen, ribbon, paperLight, paperShadow
 			} = config.terrain.colors;
 
 			const a = colorToObj(baseA);
@@ -370,6 +410,11 @@
 			const cA = colorToObj(camoA);
 			const cB = colorToObj(camoB);
 			const cC = colorToObj(camoC);
+			const wR = colorToObj(wrapRed);
+			const wG = colorToObj(wrapGreen);
+			const rB = colorToObj(ribbon);
+			const pL = colorToObj(paperLight);
+			const pS = colorToObj(paperShadow);
 
 			const img = ctx.createImageData(size, size);
 			const data = img.data;
@@ -419,15 +464,21 @@
 						g: lerp(camoCol.g, plaidCol.g, hostMask),
 						b: lerp(camoCol.b, plaidCol.b, hostMask)
 					};
+					const wrapPaperBase = mixObjColor(wG, wR, floor.panelMix);
+					const wovenPaper = mixObjColor(wrapPaperBase, pL, floor.weaveMask * 0.3 + fine * 0.08);
+					const typedPaper = mixObjColor(wovenPaper, pS, floor.glyphVoid * 0.26 + floor.cellEdge * 0.1);
+					const ribbonCol = mixObjColor(rB, pL, floor.weaveMask * 0.22 + broad * 0.08);
+					const wrappedTerrain = mixObjColor(terr, typedPaper, 0.68);
+					const wrappedWithRibbon = mixObjColor(wrappedTerrain, ribbonCol, floor.ribbonMask * 0.92);
 
 					const final = {
-						r: lerp(baseMix.r, terr.r, 0.88),
-						g: lerp(baseMix.g, terr.g, 0.88),
-						b: lerp(baseMix.b, terr.b, 0.88)
+						r: lerp(baseMix.r, wrappedWithRibbon.r, 0.92),
+						g: lerp(baseMix.g, wrappedWithRibbon.g, 0.92),
+						b: lerp(baseMix.b, wrappedWithRibbon.b, 0.92)
 					};
 
-					const lineTint = lerp(0, 0.28, floor.cellEdge);
-					const voidTint = lerp(0, -0.22, floor.glyphVoid);
+					const lineTint = lerp(0, 0.24, floor.cellEdge) + floor.ribbonMask * 0.05;
+					const voidTint = lerp(0, -0.2, floor.glyphVoid);
 					const booleanDust = floor.booleanCut * 0.08;
 
 					const grit = (noise.fbm(u * 42, v * 42, 2) * 0.5 + 0.5) * 0.09 - 0.045;
@@ -460,7 +511,8 @@
 			const base = (ridge * 0.84 + und * 0.46) * terrain.heightAmplitude;
 			const carve = floor.booleanCut * terrain.heightAmplitude * 0.34;
 			const edgeLift = floor.cellEdge * terrain.heightAmplitude * 0.08;
-			return base - carve + edgeLift;
+			const ribbonLift = floor.ribbonMask * terrain.heightAmplitude * 0.1;
+			return base - carve + edgeLift + ribbonLift;
 		}
 
 		function buildTerrain(scene, config) {
