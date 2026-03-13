@@ -99,7 +99,7 @@
 	<div id="app"></div>
 	<div class="hud">
 		<div class="title">Wrapped Gift Terrain — Bird Flyover</div>
-		<div class="subtitle">JSON-driven cinematic camera, plaid/camo host terrain, and direct WebM export for your class presentation.</div>
+			<div class="subtitle">JSON-driven cinematic camera, typographic floor carving, and a tessellated camo host terrain for direct WebM export.</div>
 		<div class="buttons">
 			<button id="toggleFlight">Pause Flight</button>
 			<button id="recordBtn">Record 16s WebM</button>
@@ -135,15 +135,20 @@
 				"warp": 1.4,
 				"textureScale": 3.4,
 				"plaidBlend": 0.68,
+				"tessellationScale": 10.5,
+				"tessellationEdge": 0.11,
+				"tessellationStrength": 0.95,
+				"glyphScale": 7.2,
+				"glyphCarveStrength": 0.75,
 				"colors": {
-					"baseA": "#d78879",
-					"baseB": "#b3645f",
-					"plaidA": "#6d2734",
-					"plaidB": "#983f4e",
-					"plaidC": "#d37f8c",
-					"camoA": "#855b54",
-					"camoB": "#c69588",
-					"camoC": "#5b3f3b"
+					"baseA": "#c9beac",
+					"baseB": "#8e7b72",
+					"plaidA": "#5f4d1f",
+					"plaidB": "#7a6540",
+					"plaidC": "#d1c6b3",
+					"camoA": "#322a22",
+					"camoB": "#7a684d",
+					"camoC": "#bfb3a0"
 				}
 			},
 			"camera": {
@@ -190,6 +195,10 @@
 		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 		const lerp = (a, b, t) => a + (b - a) * t;
 		const smooth = (t) => t * t * (3 - 2 * t);
+		const smoothstep = (a, b, x) => {
+			const t = clamp((x - a) / Math.max(1e-6, b - a), 0, 1);
+			return t * t * (3 - 2 * t);
+		};
 
 		class ValueNoise {
 			constructor(seed = 12917) {
@@ -285,6 +294,61 @@
 			return { r: c.r, g: c.g, b: c.b };
 		}
 
+		function cellPoint(noise, gx, gy) {
+			return {
+				x: gx + noise.hash(gx + 17, gy + 29),
+				y: gy + noise.hash(gx + 53, gy + 71)
+			};
+		}
+
+		function floorInfluence(noise, u, v, terrain) {
+			const scale = terrain.tessellationScale || 10;
+			const px = u * scale;
+			const py = v * scale;
+			const gx = Math.floor(px);
+			const gy = Math.floor(py);
+
+			let d1 = 1e9;
+			let d2 = 1e9;
+
+			for (let oy = -1; oy <= 1; oy++) {
+				for (let ox = -1; ox <= 1; ox++) {
+					const pt = cellPoint(noise, gx + ox, gy + oy);
+					const dx = pt.x - px;
+					const dy = pt.y - py;
+					const dist = Math.hypot(dx, dy);
+					if (dist < d1) {
+						d2 = d1;
+						d1 = dist;
+					} else if (dist < d2) {
+						d2 = dist;
+					}
+				}
+			}
+
+			const edgeDelta = d2 - d1;
+			const cellEdge = 1 - smoothstep(0, terrain.tessellationEdge || 0.12, edgeDelta);
+			const warpedU = u + noise.fbm(u * 3.2, v * 3.2, 3) * 0.055;
+			const warpedV = v + noise.fbm(v * 3.1, u * 3.1, 3) * 0.055;
+			const glyphScale = terrain.glyphScale || 7;
+			const bandA = Math.abs(Math.sin((warpedU * glyphScale) * Math.PI));
+			const bandB = Math.abs(Math.sin(((warpedV + warpedU * 0.28) * glyphScale * 0.72) * Math.PI));
+			const notch = 0.5 + 0.5 * noise.fbm(warpedU * 9.5, warpedV * 9.5, 3);
+			const glyphMask = Math.pow(1 - bandA, 3.2) * 0.7 + Math.pow(1 - bandB, 4.5) * 0.5;
+			const glyphVoid = clamp(glyphMask * smoothstep(0.34, 0.76, notch), 0, 1);
+
+			return {
+				cellEdge,
+				glyphVoid,
+				booleanCut: clamp(
+					cellEdge * (terrain.tessellationStrength || 1) * 0.68 +
+					glyphVoid * (terrain.glyphCarveStrength || 0.7),
+					0,
+					1
+				)
+			};
+		}
+
 		function makeTerrainTexture(config, size = 2048) {
 			const canvas = document.createElement('canvas');
 			canvas.width = size;
@@ -316,6 +380,7 @@
 					const i = (y * size + x) * 4;
 					const u = x / size;
 					const v = y / size;
+					const floor = floorInfluence(noise, u, v, config.terrain);
 
 					const broad = 0.5 + 0.5 * noise.fbm(u * 2.7, v * 2.7, 4);
 					const fine = 0.5 + 0.5 * noise.fbm(u * 19.4, v * 19.4, 3);
@@ -361,10 +426,14 @@
 						b: lerp(baseMix.b, terr.b, 0.88)
 					};
 
+					const lineTint = lerp(0, 0.28, floor.cellEdge);
+					const voidTint = lerp(0, -0.22, floor.glyphVoid);
+					const booleanDust = floor.booleanCut * 0.08;
+
 					const grit = (noise.fbm(u * 42, v * 42, 2) * 0.5 + 0.5) * 0.09 - 0.045;
-					data[i] = clamp((final.r + grit) * 255, 0, 255);
-					data[i + 1] = clamp((final.g + grit) * 255, 0, 255);
-					data[i + 2] = clamp((final.b + grit) * 255, 0, 255);
+					data[i] = clamp((final.r + lineTint + voidTint + booleanDust + grit) * 255, 0, 255);
+					data[i + 1] = clamp((final.g + lineTint * 0.78 + voidTint * 0.92 + booleanDust * 0.8 + grit) * 255, 0, 255);
+					data[i + 2] = clamp((final.b + lineTint * 0.66 + voidTint * 0.88 + booleanDust * 0.72 + grit) * 255, 0, 255);
 					data[i + 3] = 255;
 				}
 			}
@@ -385,7 +454,13 @@
 			const warpZ = noise.fbm(z * s * 0.8, x * s * 0.8, 3) * terrain.warp;
 			const ridge = Math.abs(noise.fbm((x + warpX) * s, (z + warpZ) * s, 5));
 			const und = noise.fbm((x - warpZ * 2.3) * s * 0.45, (z + warpX * 1.8) * s * 0.45, 4);
-			return (ridge * 0.84 + und * 0.46) * terrain.heightAmplitude;
+			const u = x / terrain.size + 0.5;
+			const v = z / terrain.size + 0.5;
+			const floor = floorInfluence(noise, u, v, terrain);
+			const base = (ridge * 0.84 + und * 0.46) * terrain.heightAmplitude;
+			const carve = floor.booleanCut * terrain.heightAmplitude * 0.34;
+			const edgeLift = floor.cellEdge * terrain.heightAmplitude * 0.08;
+			return base - carve + edgeLift;
 		}
 
 		function buildTerrain(scene, config) {
