@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Wrapped Gift Terrain Flyover</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+		}
+
+		html,
+		body {
+			margin: 0;
+			height: 100%;
+			overflow: hidden;
+			background: #0f0f12;
+		}
+
+		#app {
+			position: fixed;
+			inset: 0;
+		}
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
+		}
+
+		.hud {
+			position: fixed;
+			left: 20px;
+			top: 20px;
+			z-index: 10;
+			display: grid;
+			gap: 8px;
+			max-width: min(94vw, 540px);
+			background: rgba(0, 0, 0, 0.38);
+			border: 1px solid rgba(255, 255, 255, 0.22);
+			border-radius: 14px;
+			backdrop-filter: blur(10px);
+			padding: 12px 14px;
+			color: #f2f5ff;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		}
+
+		.title {
+			font-size: 15px;
+			font-weight: 650;
+			letter-spacing: 0.2px;
+		}
+
+		.subtitle {
+			font-size: 12px;
+			opacity: 0.86;
+			line-height: 1.35;
+		}
+
+		.buttons {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+			margin-top: 4px;
+		}
+
+		button {
+			border: 1px solid rgba(255, 255, 255, 0.32);
+			color: #fff;
+			background: rgba(255, 255, 255, 0.07);
+			border-radius: 9px;
+			padding: 8px 12px;
+			font-size: 12px;
+			font-weight: 560;
+			cursor: pointer;
+			transition: background 0.2s ease, transform 0.2s ease;
+		}
+
+		button:hover {
+			background: rgba(255, 255, 255, 0.15);
+			transform: translateY(-1px);
+		}
+
+		button:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.status {
+			font-size: 12px;
+			opacity: 0.88;
+			min-height: 16px;
+		}
+	</style>
+</head>
+<body>
+	<div id="app"></div>
+	<div class="hud">
+		<div class="title">Wrapped Gift Terrain — Bird Flyover</div>
+		<div class="subtitle">JSON-driven cinematic camera, plaid/camo host terrain, and direct WebM export for your class presentation.</div>
+		<div class="buttons">
+			<button id="toggleFlight">Pause Flight</button>
+			<button id="recordBtn">Record 16s WebM</button>
+		</div>
+		<div class="status" id="status">Loading scene…</div>
+	</div>
+
+	<script type="application/json" id="scene-config">
+		{
+			"title": "Wrapped Gift Flyover",
+			"render": {
+				"pixelRatioCap": 2,
+				"antialias": true,
+				"clearColor": "#b94f52"
+			},
+			"timeline": {
+				"durationSec": 16,
+				"loop": true,
+				"speed": 1
+			},
+			"atmosphere": {
+				"fogColor": "#c76968",
+				"fogNear": 40,
+				"fogFar": 300,
+				"skyTop": "#8f2a34",
+				"skyHorizon": "#da7973"
+			},
+			"terrain": {
+				"size": 260,
+				"segments": 240,
+				"heightAmplitude": 20,
+				"noiseScale": 0.017,
+				"warp": 1.4,
+				"textureScale": 3.4,
+				"plaidBlend": 0.68,
+				"colors": {
+					"baseA": "#d78879",
+					"baseB": "#b3645f",
+					"plaidA": "#6d2734",
+					"plaidB": "#983f4e",
+					"plaidC": "#d37f8c",
+					"camoA": "#855b54",
+					"camoB": "#c69588",
+					"camoC": "#5b3f3b"
+				}
+			},
+			"camera": {
+				"fov": 45,
+				"near": 0.1,
+				"far": 900,
+				"path": [
+					{ "t": 0.0, "pos": [-85, 27, 72], "look": [10, 2, 6], "bank": -0.06 },
+					{ "t": 0.17, "pos": [-36, 20, 45], "look": [20, 4, 2], "bank": 0.03 },
+					{ "t": 0.33, "pos": [10, 23, 18], "look": [34, 3, -8], "bank": 0.05 },
+					{ "t": 0.5, "pos": [60, 29, 5], "look": [24, 5, -24], "bank": -0.02 },
+					{ "t": 0.68, "pos": [38, 19, -38], "look": [0, 6, -22], "bank": -0.08 },
+					{ "t": 0.83, "pos": [-24, 22, -32], "look": [-28, 4, -8], "bank": 0.03 },
+					{ "t": 1.0, "pos": [-85, 27, 72], "look": [10, 2, 6], "bank": -0.06 }
+				]
+			},
+			"forms": {
+				"ringClusters": [
+					{ "position": [-32, 1.3, 14], "radius": 5.8, "count": 4, "spread": 5 },
+					{ "position": [35, 1.3, 12], "radius": 5.3, "count": 4, "spread": 4.5 }
+				],
+				"boneArcs": {
+					"position": [8, 1.3, -58],
+					"count": 7,
+					"arcRadius": 22,
+					"height": 14
+				},
+				"crystalBird": {
+					"position": [0, 3.8, 52],
+					"scale": 1.25
+				}
+			}
+		}
+	</script>
+
+	<script type="module">
+		import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+
+		const app = document.getElementById('app');
+		const statusEl = document.getElementById('status');
+		const toggleFlightBtn = document.getElementById('toggleFlight');
+		const recordBtn = document.getElementById('recordBtn');
+
+		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+		const lerp = (a, b, t) => a + (b - a) * t;
+		const smooth = (t) => t * t * (3 - 2 * t);
+
+		class ValueNoise {
+			constructor(seed = 12917) {
+				this.seed = seed >>> 0;
+			}
+
+			hash(x, y) {
+				let h = x * 374761393 + y * 668265263 + this.seed * 700001;
+				h = (h ^ (h >> 13)) * 1274126177;
+				return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+			}
+
+			noise2(x, y) {
+				const xi = Math.floor(x);
+				const yi = Math.floor(y);
+				const tx = x - xi;
+				const ty = y - yi;
+				const u = smooth(tx);
+				const v = smooth(ty);
+
+				const a = this.hash(xi, yi);
+				const b = this.hash(xi + 1, yi);
+				const c = this.hash(xi, yi + 1);
+				const d = this.hash(xi + 1, yi + 1);
+
+				const ab = lerp(a, b, u);
+				const cd = lerp(c, d, u);
+				return lerp(ab, cd, v) * 2 - 1;
+			}
+
+			fbm(x, y, octaves = 5) {
+				let value = 0;
+				let amp = 0.52;
+				let freq = 1;
+				let norm = 0;
+				for (let i = 0; i < octaves; i++) {
+					value += amp * this.noise2(x * freq, y * freq);
+					norm += amp;
+					amp *= 0.5;
+					freq *= 2.02;
+				}
+				return value / Math.max(norm, 0.0001);
+			}
+		}
+
+		const loadInlineScene = () => {
+			try {
+				const node = document.getElementById('scene-config');
+				if (!node) {
+					throw new Error('Missing scene-config script block');
+				}
+				return JSON.parse(node.textContent);
+			} catch (error) {
+				statusEl.textContent = 'Invalid embedded JSON scene config in WrapGift.html.';
+				throw error;
+			}
+		};
+
+		function createSky(sceneConfig) {
+			const top = new THREE.Color(sceneConfig.atmosphere.skyTop);
+			const horizon = new THREE.Color(sceneConfig.atmosphere.skyHorizon);
+			const geo = new THREE.SphereGeometry(800, 40, 24);
+			const mat = new THREE.ShaderMaterial({
+				side: THREE.BackSide,
+				uniforms: {
+					topColor: { value: top },
+					horizonColor: { value: horizon }
+				},
+				vertexShader: `
+					varying vec3 vWorldPos;
+					void main() {
+						vec4 worldPos = modelMatrix * vec4(position, 1.0);
+						vWorldPos = worldPos.xyz;
+						gl_Position = projectionMatrix * viewMatrix * worldPos;
+					}
+				`,
+				fragmentShader: `
+					varying vec3 vWorldPos;
+					uniform vec3 topColor;
+					uniform vec3 horizonColor;
+					void main() {
+						float h = normalize(vWorldPos).y * 0.5 + 0.5;
+						vec3 col = mix(horizonColor, topColor, smoothstep(0.18, 1.0, h));
+						gl_FragColor = vec4(col, 1.0);
+					}
+				`
+			});
+			return new THREE.Mesh(geo, mat);
+		}
+
+		function colorToObj(hex) {
+			const c = new THREE.Color(hex);
+			return { r: c.r, g: c.g, b: c.b };
+		}
+
+		function makeTerrainTexture(config, size = 2048) {
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+
+			const noise = new ValueNoise(91273);
+			const {
+				baseA, baseB,
+				plaidA, plaidB, plaidC,
+				camoA, camoB, camoC
+			} = config.terrain.colors;
+
+			const a = colorToObj(baseA);
+			const b = colorToObj(baseB);
+			const pA = colorToObj(plaidA);
+			const pB = colorToObj(plaidB);
+			const pC = colorToObj(plaidC);
+			const cA = colorToObj(camoA);
+			const cB = colorToObj(camoB);
+			const cC = colorToObj(camoC);
+
+			const img = ctx.createImageData(size, size);
+			const data = img.data;
+			const plaidBlend = clamp(config.terrain.plaidBlend, 0, 1);
+
+			for (let y = 0; y < size; y++) {
+				for (let x = 0; x < size; x++) {
+					const i = (y * size + x) * 4;
+					const u = x / size;
+					const v = y / size;
+
+					const broad = 0.5 + 0.5 * noise.fbm(u * 2.7, v * 2.7, 4);
+					const fine = 0.5 + 0.5 * noise.fbm(u * 19.4, v * 19.4, 3);
+
+					const plaidX = Math.abs(Math.sin((u * 70 + fine * 5) * Math.PI));
+					const plaidY = Math.abs(Math.sin((v * 70 + fine * 5) * Math.PI));
+					const plaidL = Math.pow(Math.max(plaidX, plaidY), 4.2);
+					const plaidM = Math.pow(Math.max(Math.sin((u * 36) * Math.PI), Math.sin((v * 36) * Math.PI)) * 0.5 + 0.5, 2.0);
+
+					const camoMask = 0.5 + 0.5 * noise.fbm(u * 8.6 + broad * 0.6, v * 8.2 - broad * 0.4, 5);
+					let camoCol = cB;
+					if (camoMask < 0.35) camoCol = cA;
+					else if (camoMask > 0.72) camoCol = cC;
+
+					const baseMix = {
+						r: lerp(a.r, b.r, broad),
+						g: lerp(a.g, b.g, broad),
+						b: lerp(a.b, b.b, broad)
+					};
+
+					let plaidCol = {
+						r: lerp(pA.r, pB.r, plaidL),
+						g: lerp(pA.g, pB.g, plaidL),
+						b: lerp(pA.b, pB.b, plaidL)
+					};
+
+					plaidCol = {
+						r: lerp(plaidCol.r, pC.r, plaidM * 0.35),
+						g: lerp(plaidCol.g, pC.g, plaidM * 0.35),
+						b: lerp(plaidCol.b, pC.b, plaidM * 0.35)
+					};
+
+					const hostMask = clamp((plaidL * 0.75 + fine * 0.35) * plaidBlend + (1 - plaidBlend) * 0.4, 0, 1);
+					const terr = {
+						r: lerp(camoCol.r, plaidCol.r, hostMask),
+						g: lerp(camoCol.g, plaidCol.g, hostMask),
+						b: lerp(camoCol.b, plaidCol.b, hostMask)
+					};
+
+					const final = {
+						r: lerp(baseMix.r, terr.r, 0.88),
+						g: lerp(baseMix.g, terr.g, 0.88),
+						b: lerp(baseMix.b, terr.b, 0.88)
+					};
+
+					const grit = (noise.fbm(u * 42, v * 42, 2) * 0.5 + 0.5) * 0.09 - 0.045;
+					data[i] = clamp((final.r + grit) * 255, 0, 255);
+					data[i + 1] = clamp((final.g + grit) * 255, 0, 255);
+					data[i + 2] = clamp((final.b + grit) * 255, 0, 255);
+					data[i + 3] = 255;
+				}
+			}
+
+			ctx.putImageData(img, 0, 0);
+			const texture = new THREE.CanvasTexture(canvas);
+			texture.colorSpace = THREE.SRGBColorSpace;
+			texture.wrapS = THREE.RepeatWrapping;
+			texture.wrapT = THREE.RepeatWrapping;
+			texture.anisotropy = 8;
+			texture.needsUpdate = true;
+			return texture;
+		}
+
+		function heightAt(noise, x, z, terrain) {
+			const s = terrain.noiseScale;
+			const warpX = noise.fbm(x * s * 0.8, z * s * 0.8, 3) * terrain.warp;
+			const warpZ = noise.fbm(z * s * 0.8, x * s * 0.8, 3) * terrain.warp;
+			const ridge = Math.abs(noise.fbm((x + warpX) * s, (z + warpZ) * s, 5));
+			const und = noise.fbm((x - warpZ * 2.3) * s * 0.45, (z + warpX * 1.8) * s * 0.45, 4);
+			return (ridge * 0.84 + und * 0.46) * terrain.heightAmplitude;
+		}
+
+		function buildTerrain(scene, config) {
+			const terrain = config.terrain;
+			const geo = new THREE.PlaneGeometry(terrain.size, terrain.size, terrain.segments, terrain.segments);
+			geo.rotateX(-Math.PI / 2);
+
+			const noise = new ValueNoise(7831);
+			const pos = geo.attributes.position;
+
+			for (let i = 0; i < pos.count; i++) {
+				const x = pos.getX(i);
+				const z = pos.getZ(i);
+				pos.setY(i, heightAt(noise, x, z, terrain));
+			}
+
+			pos.needsUpdate = true;
+			geo.computeVertexNormals();
+
+			const tex = makeTerrainTexture(config);
+			tex.repeat.set(terrain.textureScale, terrain.textureScale);
+
+			const mat = new THREE.MeshStandardMaterial({
+				map: tex,
+				roughness: 0.9,
+				metalness: 0.08,
+				bumpMap: tex,
+				bumpScale: 0.7,
+			});
+
+			const mesh = new THREE.Mesh(geo, mat);
+			mesh.receiveShadow = true;
+			mesh.castShadow = false;
+			scene.add(mesh);
+
+			return { mesh, noise };
+		}
+
+		function ringCluster(scene, cfg) {
+			const g = new THREE.Group();
+			g.position.set(cfg.position[0], cfg.position[1], cfg.position[2]);
+			const mat = new THREE.MeshPhysicalMaterial({
+				color: '#613843',
+				roughness: 0.35,
+				metalness: 0.55,
+				clearcoat: 0.5,
+				clearcoatRoughness: 0.25
+			});
+
+			for (let i = 0; i < cfg.count; i++) {
+				const torus = new THREE.Mesh(new THREE.TorusGeometry(cfg.radius, 0.5, 20, 80), mat);
+				const angle = (i / cfg.count) * Math.PI * 2;
+				torus.position.set(Math.cos(angle) * cfg.spread, Math.sin(i * 0.8) * 0.4, Math.sin(angle) * cfg.spread);
+				torus.rotation.x = Math.PI * 0.5 + Math.sin(i * 1.4) * 0.15;
+				torus.rotation.z = angle * 0.8;
+				torus.castShadow = true;
+				torus.receiveShadow = true;
+				g.add(torus);
+			}
+
+			scene.add(g);
+		}
+
+		function boneArcs(scene, cfg) {
+			const g = new THREE.Group();
+			g.position.set(cfg.position[0], cfg.position[1], cfg.position[2]);
+			const mat = new THREE.MeshStandardMaterial({
+				color: '#d8b0a4',
+				roughness: 0.78,
+				metalness: 0.05
+			});
+
+			for (let i = 0; i < cfg.count; i++) {
+				const t = i / (cfg.count - 1);
+				const angle = lerp(-0.9, 0.9, t);
+				const h = lerp(6, cfg.height, Math.sin(t * Math.PI));
+				const cone = new THREE.Mesh(new THREE.ConeGeometry(0.45, h, 16, 1, true), mat);
+				cone.position.set(Math.sin(angle) * cfg.arcRadius, h * 0.5, Math.cos(angle) * cfg.arcRadius * 0.2);
+				cone.rotation.z = angle * 0.55;
+				cone.castShadow = true;
+				g.add(cone);
+			}
+
+			scene.add(g);
+		}
+
+		function crystalBird(scene, cfg) {
+			const g = new THREE.Group();
+			g.position.set(cfg.position[0], cfg.position[1], cfg.position[2]);
+			g.scale.setScalar(cfg.scale);
+
+			const wingMat = new THREE.MeshPhysicalMaterial({
+				color: '#6f6ac9',
+				roughness: 0.16,
+				metalness: 0.2,
+				transparent: true,
+				opacity: 0.76,
+				transmission: 0.18,
+				thickness: 1.1,
+				ior: 1.23
+			});
+
+			const coreMat = new THREE.MeshPhysicalMaterial({
+				color: '#9189ff',
+				roughness: 0.12,
+				metalness: 0.18,
+				transmission: 0.25,
+				opacity: 0.85,
+				transparent: true
+			});
+
+			const body = new THREE.Mesh(new THREE.OctahedronGeometry(1.8, 1), coreMat);
+			body.position.y = 0.8;
+			body.castShadow = true;
+			g.add(body);
+
+			const head = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), coreMat);
+			head.position.set(0, 2.4, -0.7);
+			head.castShadow = true;
+			g.add(head);
+
+			for (let side of [-1, 1]) {
+				for (let i = 0; i < 11; i++) {
+					const feather = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.9), wingMat);
+					const t = i / 10;
+					feather.position.set(side * lerp(1.6, 18, t), 0.45 - Math.pow(t, 1.5) * 1.7, -Math.pow(t, 1.2) * 2.8);
+					feather.rotation.z = side * lerp(0.15, 0.8, t);
+					feather.rotation.y = side * lerp(0.1, 0.26, t);
+					feather.castShadow = true;
+					g.add(feather);
+				}
+			}
+
+			const beak = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), new THREE.MeshStandardMaterial({ color: '#f7b33a' }));
+			beak.position.set(0, 2.1, -1.7);
+			beak.rotation.x = Math.PI * 0.5;
+			g.add(beak);
+
+			scene.add(g);
+			return g;
+		}
+
+		function tToSegment(path, t) {
+			const arr = path;
+			if (t <= arr[0].t) return { i: 0, lt: 0 };
+			if (t >= arr[arr.length - 1].t) return { i: arr.length - 2, lt: 1 };
+			for (let i = 0; i < arr.length - 1; i++) {
+				if (t >= arr[i].t && t <= arr[i + 1].t) {
+					const lt = (t - arr[i].t) / Math.max(1e-6, arr[i + 1].t - arr[i].t);
+					return { i, lt };
+				}
+			}
+			return { i: 0, lt: 0 };
+		}
+
+		function lerpVec3(a, b, t) {
+			return new THREE.Vector3(lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t));
+		}
+
+		async function boot() {
+			const config = loadInlineScene();
+
+			const renderer = new THREE.WebGLRenderer({ antialias: !!config.render.antialias, powerPreference: 'high-performance' });
+			renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, config.render.pixelRatioCap || 2));
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			renderer.outputColorSpace = THREE.SRGBColorSpace;
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			renderer.toneMappingExposure = 1.08;
+			renderer.shadowMap.enabled = true;
+			renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+			renderer.setClearColor(config.render.clearColor || '#000000', 1);
+			app.appendChild(renderer.domElement);
+
+			const scene = new THREE.Scene();
+			scene.fog = new THREE.Fog(config.atmosphere.fogColor, config.atmosphere.fogNear, config.atmosphere.fogFar);
+			scene.add(createSky(config));
+
+			const camera = new THREE.PerspectiveCamera(config.camera.fov, window.innerWidth / window.innerHeight, config.camera.near, config.camera.far);
+
+			const hemi = new THREE.HemisphereLight('#f3a4a5', '#311d1e', 0.6);
+			scene.add(hemi);
+
+			const sun = new THREE.DirectionalLight('#ffd9c4', 1.65);
+			sun.position.set(65, 85, 14);
+			sun.castShadow = true;
+			sun.shadow.mapSize.set(2048, 2048);
+			sun.shadow.camera.near = 1;
+			sun.shadow.camera.far = 260;
+			sun.shadow.camera.left = -90;
+			sun.shadow.camera.right = 90;
+			sun.shadow.camera.top = 90;
+			sun.shadow.camera.bottom = -90;
+			sun.shadow.bias = -0.0002;
+			scene.add(sun);
+
+			const fill = new THREE.DirectionalLight('#9cb2ff', 0.38);
+			fill.position.set(-50, 30, -40);
+			scene.add(fill);
+
+			buildTerrain(scene, config);
+
+			config.forms.ringClusters.forEach((cluster) => ringCluster(scene, cluster));
+			boneArcs(scene, config.forms.boneArcs);
+			const bird = crystalBird(scene, config.forms.crystalBird);
+
+			const clock = new THREE.Clock();
+			const duration = config.timeline.durationSec;
+			let paused = false;
+			let tAccum = 0;
+			let recording = false;
+
+			function setStatus(text) {
+				statusEl.textContent = text;
+			}
+
+			toggleFlightBtn.addEventListener('click', () => {
+				paused = !paused;
+				toggleFlightBtn.textContent = paused ? 'Resume Flight' : 'Pause Flight';
+				setStatus(paused ? 'Flight paused.' : 'Flight running.');
+			});
+
+			async function recordFlight() {
+				if (recording) return;
+				if (!('MediaRecorder' in window)) {
+					setStatus('MediaRecorder is not supported in this browser.');
+					return;
+				}
+
+				recording = true;
+				recordBtn.disabled = true;
+				setStatus('Recording WebM… keep this tab visible.');
+
+				const stream = renderer.domElement.captureStream(60);
+				const chunks = [];
+				const recorder = new MediaRecorder(stream, {
+					mimeType: 'video/webm;codecs=vp9'
+				});
+
+				recorder.ondataavailable = (event) => {
+					if (event.data && event.data.size > 0) chunks.push(event.data);
+				};
+
+				recorder.onstop = () => {
+					const blob = new Blob(chunks, { type: 'video/webm' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+					a.href = url;
+					a.download = `wrapped-gift-flyover-${stamp}.webm`;
+					a.click();
+					URL.revokeObjectURL(url);
+					recording = false;
+					recordBtn.disabled = false;
+					setStatus('Recording exported.');
+				};
+
+				recorder.start(100);
+				const ms = duration * 1000;
+				window.setTimeout(() => recorder.stop(), ms);
+			}
+
+			recordBtn.addEventListener('click', recordFlight);
+			setStatus(`Scene ready — ${duration}s loop. Use Record to export.`);
+
+			function animate() {
+				requestAnimationFrame(animate);
+
+				const dt = clock.getDelta();
+				if (!paused) tAccum += dt * (config.timeline.speed || 1);
+
+				const raw = config.timeline.loop ? ((tAccum / duration) % 1 + 1) % 1 : clamp(tAccum / duration, 0, 1);
+				const eased = 0.5 - 0.5 * Math.cos(raw * Math.PI * 2);
+
+				const seg = tToSegment(config.camera.path, eased);
+				const a = config.camera.path[seg.i];
+				const b = config.camera.path[seg.i + 1];
+				const localT = smooth(seg.lt);
+
+				const pos = lerpVec3(a.pos, b.pos, localT);
+				const look = lerpVec3(a.look, b.look, localT);
+				const bank = lerp(a.bank, b.bank, localT);
+
+				const birdNod = Math.sin(tAccum * 1.7) * 0.18;
+				camera.position.copy(pos);
+				camera.position.y += birdNod;
+				camera.lookAt(look);
+				camera.rotateZ(bank + Math.sin(tAccum * 0.9) * 0.01);
+
+				bird.rotation.y = Math.sin(tAccum * 0.35) * 0.25;
+				bird.position.y = config.forms.crystalBird.position[1] + Math.sin(tAccum * 0.6) * 0.22;
+
+				renderer.render(scene, camera);
+			}
+
+			animate();
+
+			window.addEventListener('resize', () => {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			});
+		}
+
+		boot().catch((error) => {
+			console.error(error);
+		});
+	</script>
+</body>
+</html>
