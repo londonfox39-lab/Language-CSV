@@ -113,7 +113,7 @@
 			"render": {
 				"pixelRatioCap": 2,
 				"antialias": true,
-				"clearColor": "#b94f52"
+				"clearColor": "#61685f"
 			},
 			"timeline": {
 				"durationSec": 16,
@@ -121,43 +121,47 @@
 				"speed": 1
 			},
 			"atmosphere": {
-				"fogColor": "#c76968",
+				"fogColor": "#8a9387",
 				"fogNear": 40,
 				"fogFar": 300,
-				"skyTop": "#8f2a34",
-				"skyHorizon": "#da7973"
+				"skyTexture": "assets/sky-reference.jpg",
+				"skyTextureRepeatX": 1,
+				"skyTextureRepeatY": 1,
+				"skyTextureRotationDeg": 0,
+				"skyTop": "#5f675f",
+				"skyHorizon": "#aab3a7"
 			},
 			"terrain": {
 				"size": 260,
 				"segments": 240,
-				"heightAmplitude": 20,
+				"heightAmplitude": 28,
 				"noiseScale": 0.017,
-				"warp": 1.4,
-				"textureScale": 3.4,
-				"plaidBlend": 0.68,
-				"tessellationScale": 10.5,
+				"warp": 2.1,
+				"textureScale": 2.1,
+				"plaidBlend": 0.12,
+				"tessellationScale": 8.2,
 				"tessellationEdge": 0.11,
-				"tessellationStrength": 0.95,
-				"glyphScale": 7.2,
-				"glyphCarveStrength": 0.75,
-				"ribbonWidth": 0.11,
-				"ribbonSoftness": 0.05,
-				"panelFrequency": 1.2,
+				"tessellationStrength": 1.08,
+				"glyphScale": 5.1,
+				"glyphCarveStrength": 0.82,
+				"ribbonWidth": 0.16,
+				"ribbonSoftness": 0.08,
+				"panelFrequency": 0.72,
 				"colors": {
-					"baseA": "#e8ddca",
-					"baseB": "#b3a38f",
-					"plaidA": "#8a0e12",
-					"plaidB": "#cc1a16",
-					"plaidC": "#f0dcc7",
-					"camoA": "#322a22",
-					"camoB": "#685940",
-					"camoC": "#bfb3a0"
+					"baseA": "#b39a80",
+					"baseB": "#7f654e",
+					"plaidA": "#5f4736",
+					"plaidB": "#7e6249",
+					"plaidC": "#c3ad94",
+					"camoA": "#3e3128",
+					"camoB": "#6a5442",
+					"camoC": "#9a8368"
 					,
-					"wrapRed": "#d90f0f",
-					"wrapGreen": "#b9d6c3",
-					"ribbon": "#3c2611",
-					"paperLight": "#f6ead8",
-					"paperShadow": "#967e69"
+					"wrapRed": "#6f5846",
+					"wrapGreen": "#8e745b",
+					"ribbon": "#4d3c30",
+					"paperLight": "#ccb7a0",
+					"paperShadow": "#5d4a3b"
 				}
 			},
 			"camera": {
@@ -296,7 +300,40 @@
 					}
 				`
 			});
-			return new THREE.Mesh(geo, mat);
+			const sky = new THREE.Mesh(geo, mat);
+
+			const texturePath = (sceneConfig.atmosphere.skyTexture || '').trim();
+			if (!texturePath) {
+				return sky;
+			}
+
+			const loader = new THREE.TextureLoader();
+			loader.load(
+				texturePath,
+				(tex) => {
+					tex.colorSpace = THREE.SRGBColorSpace;
+					tex.wrapS = THREE.RepeatWrapping;
+					tex.wrapT = THREE.RepeatWrapping;
+					tex.repeat.set(
+						sceneConfig.atmosphere.skyTextureRepeatX || 1,
+						sceneConfig.atmosphere.skyTextureRepeatY || 1
+					);
+					tex.center.set(0.5, 0.5);
+					tex.rotation = (sceneConfig.atmosphere.skyTextureRotationDeg || 0) * Math.PI / 180;
+
+					sky.material.dispose();
+					sky.material = new THREE.MeshBasicMaterial({
+						side: THREE.BackSide,
+						map: tex
+					});
+				},
+				undefined,
+				() => {
+					statusEl.textContent = 'Sky texture failed to load. Keeping current sky colors.';
+				}
+			);
+
+			return sky;
 		}
 
 		function colorToObj(hex) {
@@ -346,32 +383,27 @@
 
 			const edgeDelta = d2 - d1;
 			const cellEdge = 1 - smoothstep(0, terrain.tessellationEdge || 0.12, edgeDelta);
-			const warpedU = u + noise.fbm(u * 3.2, v * 3.2, 3) * 0.055;
-			const warpedV = v + noise.fbm(v * 3.1, u * 3.1, 3) * 0.055;
+			const warpedU = u + noise.fbm(u * 3.4, v * 3.6, 4) * 0.09;
+			const warpedV = v + noise.fbm(v * 3.5, u * 3.2, 4) * 0.09;
 			const ribbonWidth = terrain.ribbonWidth || 0.1;
 			const ribbonSoftness = terrain.ribbonSoftness || 0.05;
-			const ribbonVertical = 1 - smoothstep(
-				ribbonWidth,
-				ribbonWidth + ribbonSoftness,
-				Math.abs(frac(warpedU * 2.0) - 0.5)
-			);
-			const ribbonHorizontal = 1 - smoothstep(
-				ribbonWidth,
-				ribbonWidth + ribbonSoftness,
-				Math.abs(frac(warpedV * 2.0) - 0.5)
-			);
-			const ribbonMask = clamp(Math.max(ribbonVertical, ribbonHorizontal), 0, 1);
-			const panelField = 0.5 + 0.5 * Math.sin((warpedU * (terrain.panelFrequency || 1.2)) * Math.PI * 2);
+			const flowA = Math.abs(Math.sin((warpedU * 8.8 + noise.fbm(warpedU * 8.2, warpedV * 8.2, 3) * 0.9) * Math.PI));
+			const flowB = Math.abs(Math.sin(((warpedV * 8.1 + warpedU * 0.35) + noise.fbm(warpedV * 7.4, warpedU * 7.4, 3) * 0.8) * Math.PI));
+			const rootThread = Math.pow(1 - flowA, 4.0) * 0.6 + Math.pow(1 - flowB, 4.2) * 0.7;
+			const rootClump = 0.5 + 0.5 * noise.fbm(warpedU * 7.6, warpedV * 7.6, 4);
+			const ribbonMask = clamp(rootThread * smoothstep(0.45, 0.92, rootClump) * 0.72, 0, 1);
+			const panelField = 0.5 + 0.5 * Math.sin((warpedU * (terrain.panelFrequency || 1.2)) * Math.PI * 2 + noise.fbm(warpedU * 5.4, warpedV * 5.4, 2) * 0.9);
 			const panelMix = smoothstep(0.32, 0.68, panelField);
 			const glyphScale = terrain.glyphScale || 7;
-			const bandA = Math.abs(Math.sin((warpedU * glyphScale) * Math.PI));
-			const bandB = Math.abs(Math.sin(((warpedV + warpedU * 0.28) * glyphScale * 0.72) * Math.PI));
-			const notch = 0.5 + 0.5 * noise.fbm(warpedU * 9.5, warpedV * 9.5, 3);
-			const glyphMask = Math.pow(1 - bandA, 3.2) * 0.7 + Math.pow(1 - bandB, 4.5) * 0.5;
-			const glyphVoid = clamp(glyphMask * smoothstep(0.34, 0.76, notch), 0, 1);
-			const weaveX = 1 - smoothstep(0.12, 0.34, Math.abs(frac(u * 150) - 0.5));
-			const weaveY = 1 - smoothstep(0.12, 0.34, Math.abs(frac(v * 150) - 0.5));
-			const weaveMask = clamp((weaveX * 0.55 + weaveY * 0.45) * 0.7, 0, 1);
+			const bandA = Math.abs(Math.sin((warpedU * glyphScale * 0.86) * Math.PI + noise.fbm(warpedU * 9.5, warpedV * 9.5, 2) * 0.5));
+			const bandB = Math.abs(Math.sin(((warpedV + warpedU * 0.22) * glyphScale * 0.68) * Math.PI));
+			const notch = 0.5 + 0.5 * noise.fbm(warpedU * 11.2, warpedV * 11.2, 4);
+			const pocketField = 0.5 + 0.5 * noise.fbm(warpedU * 13.6 + 17.3, warpedV * 13.6 + 33.8, 4);
+			const glyphMask = Math.pow(1 - bandA, 3.4) * 0.65 + Math.pow(1 - bandB, 4.8) * 0.55;
+			const glyphVoid = clamp(glyphMask * smoothstep(0.52, 0.94, notch) * smoothstep(0.58, 0.92, pocketField), 0, 1);
+			const weaveX = 1 - smoothstep(ribbonWidth, ribbonWidth + ribbonSoftness, Math.abs(frac((warpedU + warpedV * 0.15) * 24) - 0.5));
+			const weaveY = 1 - smoothstep(ribbonWidth, ribbonWidth + ribbonSoftness, Math.abs(frac((warpedV - warpedU * 0.12) * 24) - 0.5));
+			const weaveMask = clamp((weaveX * 0.62 + weaveY * 0.38) * 0.85, 0, 1);
 
 			return {
 				cellEdge,
@@ -380,8 +412,9 @@
 				panelMix,
 				weaveMask,
 				booleanCut: clamp(
-					cellEdge * (terrain.tessellationStrength || 1) * 0.68 +
-					glyphVoid * (terrain.glyphCarveStrength || 0.7),
+					cellEdge * (terrain.tessellationStrength || 1) * 0.34 +
+					glyphVoid * (terrain.glyphCarveStrength || 0.7) * 0.72 +
+					ribbonMask * 0.14,
 					0,
 					1
 				)
@@ -430,10 +463,10 @@
 					const broad = 0.5 + 0.5 * noise.fbm(u * 2.7, v * 2.7, 4);
 					const fine = 0.5 + 0.5 * noise.fbm(u * 19.4, v * 19.4, 3);
 
-					const plaidX = Math.abs(Math.sin((u * 70 + fine * 5) * Math.PI));
-					const plaidY = Math.abs(Math.sin((v * 70 + fine * 5) * Math.PI));
+					const plaidX = Math.abs(Math.sin((u * 40 + fine * 4) * Math.PI));
+					const plaidY = Math.abs(Math.sin((v * 44 + fine * 5) * Math.PI));
 					const plaidL = Math.pow(Math.max(plaidX, plaidY), 4.2);
-					const plaidM = Math.pow(Math.max(Math.sin((u * 36) * Math.PI), Math.sin((v * 36) * Math.PI)) * 0.5 + 0.5, 2.0);
+					const plaidM = Math.pow(Math.max(Math.sin((u * 18) * Math.PI), Math.sin((v * 22) * Math.PI)) * 0.5 + 0.5, 2.0);
 
 					const camoMask = 0.5 + 0.5 * noise.fbm(u * 8.6 + broad * 0.6, v * 8.2 - broad * 0.4, 5);
 					let camoCol = cB;
@@ -464,12 +497,12 @@
 						g: lerp(camoCol.g, plaidCol.g, hostMask),
 						b: lerp(camoCol.b, plaidCol.b, hostMask)
 					};
-					const wrapPaperBase = mixObjColor(wG, wR, floor.panelMix);
-					const wovenPaper = mixObjColor(wrapPaperBase, pL, floor.weaveMask * 0.3 + fine * 0.08);
-					const typedPaper = mixObjColor(wovenPaper, pS, floor.glyphVoid * 0.26 + floor.cellEdge * 0.1);
-					const ribbonCol = mixObjColor(rB, pL, floor.weaveMask * 0.22 + broad * 0.08);
-					const wrappedTerrain = mixObjColor(terr, typedPaper, 0.68);
-					const wrappedWithRibbon = mixObjColor(wrappedTerrain, ribbonCol, floor.ribbonMask * 0.92);
+					const wrapPaperBase = mixObjColor(wR, wG, floor.panelMix * 0.68 + broad * 0.2);
+					const wovenPaper = mixObjColor(wrapPaperBase, pL, floor.weaveMask * 0.24 + fine * 0.06);
+					const typedPaper = mixObjColor(wovenPaper, pS, floor.glyphVoid * 0.38 + floor.cellEdge * 0.14);
+					const ribbonCol = mixObjColor(rB, pS, floor.weaveMask * 0.32 + broad * 0.06);
+					const wrappedTerrain = mixObjColor(terr, typedPaper, 0.82);
+					const wrappedWithRibbon = mixObjColor(wrappedTerrain, ribbonCol, floor.ribbonMask * 0.74);
 
 					const final = {
 						r: lerp(baseMix.r, wrappedWithRibbon.r, 0.92),
@@ -477,14 +510,15 @@
 						b: lerp(baseMix.b, wrappedWithRibbon.b, 0.92)
 					};
 
-					const lineTint = lerp(0, 0.24, floor.cellEdge) + floor.ribbonMask * 0.05;
-					const voidTint = lerp(0, -0.2, floor.glyphVoid);
-					const booleanDust = floor.booleanCut * 0.08;
+					const dirtBands = 0.5 + 0.5 * noise.fbm(u * 5.8 + broad * 0.6, v * 5.2 - broad * 0.5, 4);
+					const lineTint = lerp(0, 0.08, floor.cellEdge) + floor.ribbonMask * 0.03;
+					const voidTint = lerp(0, -0.22, floor.glyphVoid);
+					const booleanDust = floor.booleanCut * 0.035;
 
 					const grit = (noise.fbm(u * 42, v * 42, 2) * 0.5 + 0.5) * 0.09 - 0.045;
-					data[i] = clamp((final.r + lineTint + voidTint + booleanDust + grit) * 255, 0, 255);
-					data[i + 1] = clamp((final.g + lineTint * 0.78 + voidTint * 0.92 + booleanDust * 0.8 + grit) * 255, 0, 255);
-					data[i + 2] = clamp((final.b + lineTint * 0.66 + voidTint * 0.88 + booleanDust * 0.72 + grit) * 255, 0, 255);
+					data[i] = clamp((final.r + lineTint + voidTint + booleanDust + grit - dirtBands * 0.02) * 255, 0, 255);
+					data[i + 1] = clamp((final.g + lineTint * 0.78 + voidTint * 0.92 + booleanDust * 0.8 + grit - dirtBands * 0.01) * 255, 0, 255);
+					data[i + 2] = clamp((final.b + lineTint * 0.66 + voidTint * 0.88 + booleanDust * 0.72 + grit + dirtBands * 0.01) * 255, 0, 255);
 					data[i + 3] = 255;
 				}
 			}
@@ -503,16 +537,19 @@
 			const s = terrain.noiseScale;
 			const warpX = noise.fbm(x * s * 0.8, z * s * 0.8, 3) * terrain.warp;
 			const warpZ = noise.fbm(z * s * 0.8, x * s * 0.8, 3) * terrain.warp;
-			const ridge = Math.abs(noise.fbm((x + warpX) * s, (z + warpZ) * s, 5));
-			const und = noise.fbm((x - warpZ * 2.3) * s * 0.45, (z + warpX * 1.8) * s * 0.45, 4);
+			const ridge = Math.abs(noise.fbm((x + warpX * 0.9) * s * 1.8, (z + warpZ * 0.9) * s * 1.8, 5));
+			const und = noise.fbm((x - warpZ * 2.8) * s * 0.5, (z + warpX * 2.1) * s * 0.5, 4);
+			const lobes = Math.max(0, noise.fbm((x + warpX * 2.2) * s * 0.92, (z - warpZ * 2.2) * s * 0.92, 4));
+			const chunks = 0.5 + 0.5 * noise.fbm((x - warpZ * 1.6) * s * 2.4, (z + warpX * 1.6) * s * 2.4, 4);
 			const u = x / terrain.size + 0.5;
 			const v = z / terrain.size + 0.5;
 			const floor = floorInfluence(noise, u, v, terrain);
-			const base = (ridge * 0.84 + und * 0.46) * terrain.heightAmplitude;
+			const base = (ridge * 0.62 + und * 0.28 + Math.pow(lobes, 1.5) * 0.55 + chunks * 0.18) * terrain.heightAmplitude;
 			const carve = floor.booleanCut * terrain.heightAmplitude * 0.34;
 			const edgeLift = floor.cellEdge * terrain.heightAmplitude * 0.08;
-			const ribbonLift = floor.ribbonMask * terrain.heightAmplitude * 0.1;
-			return base - carve + edgeLift + ribbonLift;
+			const ribbonLift = floor.ribbonMask * terrain.heightAmplitude * 0.18;
+			const micro = noise.fbm(x * s * 12.4, z * s * 12.4, 2) * terrain.heightAmplitude * 0.09;
+			return base - carve + edgeLift + ribbonLift + micro;
 		}
 
 		function buildTerrain(scene, config) {
