@@ -158,8 +158,8 @@
 		<div class="status" id="status">B01</div>
 	</div>
 	<div class="biome-dock" id="biomeDock" aria-label="Biome navigation">
-		<button class="biome-btn active" data-biome="0" aria-label="Sediment biome">B01</button>
-		<button class="biome-btn" data-biome="1" aria-label="Canopy biome">B02</button>
+		<button class="biome-btn" data-biome="0" aria-label="Sediment biome">B01</button>
+		<button class="biome-btn active" data-biome="1" aria-label="Rhino biome">B02</button>
 		<button class="biome-btn" data-biome="2" aria-label="Basalt biome">B03</button>
 		<button class="biome-btn" data-biome="3" aria-label="Ember biome">B04</button>
 	</div>
@@ -305,22 +305,22 @@
 			},
 			{
 				id: 'B02',
-				atmosphere: { clearColor: '#4f655c', fogColor: '#6d887b', fogNear: 28, fogFar: 248, skyTop: '#587465', skyHorizon: '#8ea99c' },
+				atmosphere: { clearColor: '#5f655f', fogColor: '#81847f', fogNear: 30, fogFar: 242, skyTop: '#676f69', skyHorizon: '#9ca298' },
 				terrain: {
-					ventBlend: 1.0,
-					ventDepth: 1.32,
-					ventEdgeLift: 0.42,
+					ventBlend: 1.15,
+					ventDepth: 1.52,
+					ventEdgeLift: 0.55,
 					colors: {
-						baseA: '#78906f', baseB: '#3f5947', plaidA: '#354a3b', plaidB: '#4f6752', plaidC: '#8ca98e',
-						camoA: '#26392e', camoB: '#415845', camoC: '#6f8b73', wrapRed: '#5a6e58', wrapGreen: '#87a285',
-						ribbon: '#2e4338', paperLight: '#bdd0b4', paperShadow: '#394d3f'
+						baseA: '#9c998f', baseB: '#5e5a54', plaidA: '#4f4d49', plaidB: '#6a6660', plaidC: '#b8b3a9',
+						camoA: '#3f3b38', camoB: '#66615a', camoC: '#8d887f', wrapRed: '#8f7867', wrapGreen: '#8d8f81',
+						ribbon: '#4b4742', paperLight: '#d9d2c3', paperShadow: '#4e4a46'
 					}
 				},
 				lights: {
-					hemiSky: '#cfebd8', hemiGround: '#223127', hemiIntensity: 0.62,
-					sunColor: '#f5f7cb', sunIntensity: 1.7,
-					fillColor: '#8db7ab', fillIntensity: 0.5,
-					rakeColor: '#d8f0cf', rakeIntensity: 0.52
+					hemiSky: '#d9ddd2', hemiGround: '#35312e', hemiIntensity: 0.58,
+					sunColor: '#ffe5c4', sunIntensity: 1.84,
+					fillColor: '#a3acb0', fillIntensity: 0.48,
+					rakeColor: '#efe7d7', rakeIntensity: 0.58
 				}
 			},
 			{
@@ -421,6 +421,112 @@
 				throw error;
 			}
 		};
+
+		function loadImageToCanvasTexture(path) {
+			const loader = new THREE.TextureLoader();
+			return new Promise((resolve, reject) => {
+				loader.load(
+					path,
+					(tex) => {
+						tex.colorSpace = THREE.SRGBColorSpace;
+						resolve(tex);
+					},
+					undefined,
+					(error) => reject(error)
+				);
+			});
+		}
+
+		function textureToCanvas(texture, size = 1024) {
+			const source = texture.image;
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(source, 0, 0, size, size);
+			return canvas;
+		}
+
+		function buildReferenceTexturePack(canvases, size = 1024) {
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+			ctx.clearRect(0, 0, size, size);
+
+			canvases.forEach((imgCanvas, index) => {
+				ctx.save();
+				ctx.globalAlpha = index === 0 ? 0.92 : 0.56;
+				ctx.filter = index === 0
+					? 'contrast(1.2) saturate(0.88) brightness(0.94)'
+					: 'contrast(1.3) saturate(0.7) brightness(0.92)';
+				ctx.drawImage(imgCanvas, 0, 0, size, size);
+				ctx.restore();
+			});
+
+			ctx.save();
+			ctx.globalAlpha = 0.18;
+			ctx.filter = 'blur(0.7px) contrast(1.15)';
+			ctx.drawImage(canvas, 0, 0, size, size);
+			ctx.restore();
+
+			const img = ctx.getImageData(0, 0, size, size);
+			const data = img.data;
+			const height = new Float32Array(size * size);
+
+			for (let i = 0; i < height.length; i++) {
+				const p = i * 4;
+				const r = data[p] / 255;
+				const g = data[p + 1] / 255;
+				const b = data[p + 2] / 255;
+				const lum = r * 0.299 + g * 0.587 + b * 0.114;
+				const high = Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b));
+				height[i] = clamp(Math.pow(lum, 1.25) * 0.8 + high * 0.35, 0, 1);
+			}
+
+			const texture = new THREE.CanvasTexture(canvas);
+			texture.colorSpace = THREE.SRGBColorSpace;
+			texture.wrapS = THREE.RepeatWrapping;
+			texture.wrapT = THREE.RepeatWrapping;
+			texture.anisotropy = 8;
+			texture.needsUpdate = true;
+
+			return {
+				texture,
+				height,
+				size
+			};
+		}
+
+		async function loadBiome2ReferencePack() {
+			const candidates = [
+				'assets/biome2/viewcapture-1.jpg',
+				'assets/biome2/viewcapture-2.jpg',
+				'assets/biome2/viewcapture-3.jpg',
+				'assets/biome2/viewcapture-1.png',
+				'assets/biome2/viewcapture-2.png',
+				'assets/biome2/viewcapture-3.png',
+				'csv/utah-monolith.jpg',
+				'assets/bush3/textures/2a2878016deee2662dd77b14c376d42d.jpg'
+			];
+
+			const loaded = [];
+			for (const path of candidates) {
+				try {
+					const tex = await loadImageToCanvasTexture(path);
+					loaded.push(textureToCanvas(tex, 1024));
+					tex.dispose();
+				} catch (_) {
+					// Ignore missing files; this allows drop-in reference updates later.
+				}
+			}
+
+			if (loaded.length === 0) {
+				return null;
+			}
+
+			return buildReferenceTexturePack(loaded.slice(0, 3), 1024);
+		}
 
 		function createSky(sceneConfig) {
 			const top = new THREE.Color(sceneConfig.atmosphere.skyTop);
@@ -700,15 +806,17 @@
 					const v = y / size;
 					const floor = floorInfluence(noise, u, v, config.terrain);
 
-					const broad = 0.5 + 0.5 * noise.fbm(u * 2.7, v * 2.7, 4);
-					const fine = 0.5 + 0.5 * noise.fbm(u * 19.4, v * 19.4, 3);
+					const stretchU = u + noise.fbm(u * 1.9, v * 12.2, 4) * 0.12 + noise.fbm(u * 7.8, v * 2.2, 3) * 0.05;
+					const stretchV = v + noise.fbm(v * 1.6, u * 10.8, 4) * 0.16;
+					const broad = 0.5 + 0.5 * noise.fbm(stretchU * 2.8, stretchV * 2.2, 4);
+					const fine = 0.5 + 0.5 * noise.fbm(stretchU * 24.8, stretchV * 8.6, 4);
 
 					const plaidX = Math.abs(Math.sin((u * 40 + fine * 4) * Math.PI));
 					const plaidY = Math.abs(Math.sin((v * 44 + fine * 5) * Math.PI));
 					const plaidL = Math.pow(Math.max(plaidX, plaidY), 4.2);
 					const plaidM = Math.pow(Math.max(Math.sin((u * 18) * Math.PI), Math.sin((v * 22) * Math.PI)) * 0.5 + 0.5, 2.0);
 
-					const camoMask = 0.5 + 0.5 * noise.fbm(u * 8.6 + broad * 0.6, v * 8.2 - broad * 0.4, 5);
+					const camoMask = 0.5 + 0.5 * noise.fbm(stretchU * 10.6 + broad * 0.8, stretchV * 6.2 - broad * 0.6, 5);
 					let camoCol = cB;
 					if (camoMask < 0.35) camoCol = cA;
 					else if (camoMask > 0.72) camoCol = cC;
@@ -737,7 +845,7 @@
 						g: lerp(camoCol.g, plaidCol.g, hostMask),
 						b: lerp(camoCol.b, plaidCol.b, hostMask)
 					};
-					const wrapPaperBase = mixObjColor(wR, wG, floor.panelMix * 0.68 + broad * 0.2);
+					const wrapPaperBase = mixObjColor(wR, wG, floor.panelMix * 0.46 + broad * 0.24);
 					const wovenPaper = mixObjColor(wrapPaperBase, pL, floor.weaveMask * 0.24 + fine * 0.06);
 					const typedPaper = mixObjColor(wovenPaper, pS, floor.glyphVoid * 0.38 + floor.cellEdge * 0.14);
 					const ribbonCol = mixObjColor(rB, pS, floor.weaveMask * 0.32 + broad * 0.06);
@@ -749,23 +857,35 @@
 						b: lerp(0.35, 0.57, broad)
 					};
 					const ventShaded = mixObjColor(wrappedWithRibbon, ventMetal, floor.ventMask * 0.32 + floor.ventSlats * 0.14);
-					const ventCavity = mixObjColor(ventShaded, pS, floor.ventCarve * 0.6 + floor.ventScrews * 0.22);
+					const ventCavity = mixObjColor(ventShaded, pS, floor.ventCarve * 0.72 + floor.ventScrews * 0.24);
+					const mineralGrain = 0.5 + 0.5 * noise.fbm(stretchU * 33.2, stretchV * 9.6, 5);
+					const chalkMask = smoothstep(0.44, 0.82, noise.fbm(stretchU * 5.1 + 12.1, stretchV * 4.8 + 19.3, 4));
+					const sootMask = smoothstep(0.58, 0.9, noise.fbm(stretchU * 7.2 + 40.7, stretchV * 8.1 + 7.9, 4));
+					const rustMask = smoothstep(0.64, 0.94, noise.fbm(stretchU * 8.4 + 27.8, stretchV * 3.9 + 2.2, 4));
+					const smear = 0.5 + 0.5 * noise.fbm((stretchU + stretchV * 0.45) * 40.0, (stretchV * 0.28 - stretchU * 0.08) * 7.8, 3);
+					const mineralLight = { r: 0.78, g: 0.75, b: 0.7 };
+					const mineralDark = { r: 0.28, g: 0.27, b: 0.26 };
+					const oxidation = { r: 0.53, g: 0.42, b: 0.33 };
+					const mineralBase = mixObjColor(mineralDark, mineralLight, mineralGrain);
+					const rockyBase = mixObjColor(ventCavity, mineralBase, 0.48 + chalkMask * 0.2);
+					const oxidized = mixObjColor(rockyBase, oxidation, rustMask * 0.28 + floor.ventScrews * 0.08);
+					const stretchedRock = mixObjColor(oxidized, pS, sootMask * 0.24 + (1 - smear) * 0.16);
 
 					const final = {
-						r: lerp(baseMix.r, ventCavity.r, 0.92),
-						g: lerp(baseMix.g, ventCavity.g, 0.92),
-						b: lerp(baseMix.b, ventCavity.b, 0.92)
+						r: lerp(baseMix.r, stretchedRock.r, 0.95),
+						g: lerp(baseMix.g, stretchedRock.g, 0.95),
+						b: lerp(baseMix.b, stretchedRock.b, 0.95)
 					};
 
-					const dirtBands = 0.5 + 0.5 * noise.fbm(u * 5.8 + broad * 0.6, v * 5.2 - broad * 0.5, 4);
+					const dirtBands = 0.5 + 0.5 * noise.fbm(stretchU * 6.4 + broad * 0.8, stretchV * 3.8 - broad * 0.4, 4);
 					const lineTint = lerp(0, 0.08, floor.cellEdge) + floor.ribbonMask * 0.03 + floor.ventRidge * 0.06;
 					const voidTint = lerp(0, -0.22, floor.glyphVoid) - floor.ventCarve * 0.34;
 					const booleanDust = floor.booleanCut * 0.035 + floor.ventMask * 0.02;
 
-					const grit = (noise.fbm(u * 42, v * 42, 2) * 0.5 + 0.5) * 0.09 - 0.045;
-					data[i] = clamp((final.r + lineTint + voidTint + booleanDust + grit - dirtBands * 0.02) * 255, 0, 255);
-					data[i + 1] = clamp((final.g + lineTint * 0.78 + voidTint * 0.92 + booleanDust * 0.8 + grit - dirtBands * 0.01) * 255, 0, 255);
-					data[i + 2] = clamp((final.b + lineTint * 0.66 + voidTint * 0.88 + booleanDust * 0.72 + grit + dirtBands * 0.01) * 255, 0, 255);
+					const grit = (noise.fbm(stretchU * 48.5, stretchV * 20.5, 3) * 0.5 + 0.5) * 0.11 - 0.055;
+					data[i] = clamp((final.r + lineTint * 0.58 + voidTint + booleanDust + grit - dirtBands * 0.045) * 255, 0, 255);
+					data[i + 1] = clamp((final.g + lineTint * 0.5 + voidTint * 0.9 + booleanDust * 0.8 + grit - dirtBands * 0.03) * 255, 0, 255);
+					data[i + 2] = clamp((final.b + lineTint * 0.44 + voidTint * 0.84 + booleanDust * 0.72 + grit - dirtBands * 0.015) * 255, 0, 255);
 					data[i + 3] = 255;
 				}
 			}
@@ -778,6 +898,31 @@
 			texture.anisotropy = 8;
 			texture.needsUpdate = true;
 			return texture;
+		}
+
+		function sampleReferenceHeight(terrain, u, v) {
+			if (!terrain.referenceHeight || !terrain.referenceSize) return 0;
+			const size = terrain.referenceSize;
+			const data = terrain.referenceHeight;
+			const uu = frac(u * (terrain.referenceRepeatX || 1));
+			const vv = frac(v * (terrain.referenceRepeatY || 1));
+			const x = uu * (size - 1);
+			const y = vv * (size - 1);
+			const x0 = Math.floor(x);
+			const y0 = Math.floor(y);
+			const x1 = (x0 + 1) % size;
+			const y1 = (y0 + 1) % size;
+			const tx = x - x0;
+			const ty = y - y0;
+
+			const i00 = y0 * size + x0;
+			const i10 = y0 * size + x1;
+			const i01 = y1 * size + x0;
+			const i11 = y1 * size + x1;
+
+			const a = lerp(data[i00], data[i10], tx);
+			const b = lerp(data[i01], data[i11], tx);
+			return lerp(a, b, ty);
 		}
 
 		function heightAt(noise, x, z, terrain) {
@@ -797,8 +942,9 @@
 			const ribbonLift = floor.ribbonMask * terrain.heightAmplitude * 0.18;
 			const ventCarve = floor.ventCarve * terrain.heightAmplitude * (terrain.ventDepth || 1.15) * 0.36;
 			const ventEdgeLift = floor.ventRidge * terrain.heightAmplitude * (terrain.ventEdgeLift || 0.3) * 0.14;
+			const refRelief = (sampleReferenceHeight(terrain, u, v) - 0.5) * terrain.heightAmplitude * (terrain.referenceRelief || 0);
 			const micro = noise.fbm(x * s * 12.4, z * s * 12.4, 2) * terrain.heightAmplitude * 0.09;
-			return base - carve - ventCarve + edgeLift + ribbonLift + ventEdgeLift + micro;
+			return base - carve - ventCarve + edgeLift + ribbonLift + ventEdgeLift + micro + refRelief;
 		}
 
 		function buildTerrain(scene, config) {
@@ -818,15 +964,19 @@
 			pos.needsUpdate = true;
 			geo.computeVertexNormals();
 
-			const tex = makeTerrainTexture(config);
-			tex.repeat.set(terrain.textureScale, terrain.textureScale);
+			const tex = terrain.referenceTexture ? terrain.referenceTexture.clone() : makeTerrainTexture(config);
+			tex.repeat.set(
+				terrain.referenceTexture ? (terrain.referenceRepeatX || terrain.textureScale) : terrain.textureScale,
+				terrain.referenceTexture ? (terrain.referenceRepeatY || terrain.textureScale) : terrain.textureScale
+			);
+ 			tex.needsUpdate = true;
 
 			const mat = new THREE.MeshStandardMaterial({
 				map: tex,
-				roughness: 0.82,
-				metalness: 0.12,
+				roughness: 0.9,
+				metalness: 0.05,
 				bumpMap: tex,
-				bumpScale: 1.1,
+				bumpScale: 1.45,
 			});
 
 			const mesh = new THREE.Mesh(geo, mat);
@@ -960,6 +1110,7 @@
 
 		async function boot() {
 			const config = loadInlineScene();
+			const biome2Reference = await loadBiome2ReferencePack();
 			const baseTerrain = cloneObject({
 				ventBlend: config.terrain.ventBlend,
 				ventDepth: config.terrain.ventDepth,
@@ -1037,6 +1188,22 @@
 				config.terrain.ventBlend = biome.terrain.ventBlend ?? baseTerrain.ventBlend;
 				config.terrain.ventDepth = biome.terrain.ventDepth ?? baseTerrain.ventDepth;
 				config.terrain.ventEdgeLift = biome.terrain.ventEdgeLift ?? baseTerrain.ventEdgeLift;
+
+				if (biome.id === 'B02' && biome2Reference) {
+					config.terrain.referenceTexture = biome2Reference.texture;
+					config.terrain.referenceHeight = biome2Reference.height;
+					config.terrain.referenceSize = biome2Reference.size;
+					config.terrain.referenceRepeatX = 1.5;
+					config.terrain.referenceRepeatY = 1.35;
+					config.terrain.referenceRelief = 0.72;
+				} else {
+					config.terrain.referenceTexture = null;
+					config.terrain.referenceHeight = null;
+					config.terrain.referenceSize = 0;
+					config.terrain.referenceRepeatX = 1;
+					config.terrain.referenceRepeatY = 1;
+					config.terrain.referenceRelief = 0;
+				}
 
 				scene.fog.color.set(biome.atmosphere.fogColor);
 				scene.fog.near = biome.atmosphere.fogNear;
@@ -1131,7 +1298,7 @@
 				applyBiome(clamp(biomeIndex, 0, BIOMES.length - 1));
 			});
 
-			applyBiome(0);
+			applyBiome(1);
 
 			function animate() {
 				requestAnimationFrame(animate);
