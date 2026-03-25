@@ -7,7 +7,7 @@
 	<style>
 		:root {
 			color-scheme: dark;
-			font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+			font-family: "Avenir Next", "Segoe UI", sans-serif;
 		}
 
 		html,
@@ -31,38 +31,55 @@
 
 		.hud {
 			position: fixed;
-			left: 20px;
-			top: 20px;
+			left: 16px;
+			top: 16px;
 			z-index: 10;
-			display: grid;
-			gap: 8px;
-			max-width: min(94vw, 540px);
-			background: rgba(0, 0, 0, 0.38);
-			border: 1px solid rgba(255, 255, 255, 0.22);
-			border-radius: 14px;
+			display: flex;
+			gap: 10px;
+			align-items: center;
+			background: rgba(11, 12, 14, 0.34);
+			border: 1px solid rgba(255, 255, 255, 0.18);
+			border-radius: 999px;
 			backdrop-filter: blur(10px);
-			padding: 12px 14px;
+			padding: 8px 10px;
 			color: #f2f5ff;
-			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+			box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
 		}
 
-		.title {
-			font-size: 15px;
-			font-weight: 650;
-			letter-spacing: 0.2px;
-		}
-
-		.subtitle {
-			font-size: 12px;
-			opacity: 0.86;
-			line-height: 1.35;
-		}
-
-		.buttons {
+		.controls {
 			display: flex;
 			gap: 8px;
-			flex-wrap: wrap;
-			margin-top: 4px;
+		}
+
+		.biome-dock {
+			position: fixed;
+			left: 50%;
+			bottom: 18px;
+			transform: translateX(-50%);
+			z-index: 10;
+			display: flex;
+			gap: 10px;
+			padding: 12px;
+			border-radius: 999px;
+			background: rgba(15, 16, 19, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.2);
+			backdrop-filter: blur(10px);
+			box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+		}
+
+		.biome-btn {
+			width: 56px;
+			height: 56px;
+			border-radius: 50%;
+			border: 1px solid rgba(255, 255, 255, 0.36);
+			background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.02) 70%);
+			color: rgba(255, 255, 255, 0.9);
+			font-size: 12px;
+			letter-spacing: 1.2px;
+			font-weight: 700;
+			padding: 0;
+			cursor: pointer;
+			transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
 		}
 
 		button {
@@ -82,6 +99,24 @@
 			transform: translateY(-1px);
 		}
 
+		.biome-btn:hover {
+			transform: translateY(-2px) scale(1.04);
+			box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26);
+		}
+
+		.biome-btn.active {
+			border-color: rgba(255, 245, 212, 0.9);
+			box-shadow: 0 0 0 2px rgba(255, 229, 176, 0.2), 0 8px 24px rgba(0, 0, 0, 0.36);
+		}
+
+		.micro {
+			border-radius: 999px;
+			padding: 7px 11px;
+			font-size: 11px;
+			letter-spacing: 0.6px;
+			background: rgba(255, 255, 255, 0.08);
+		}
+
 		button:disabled {
 			opacity: 0.5;
 			cursor: not-allowed;
@@ -89,22 +124,44 @@
 		}
 
 		.status {
-			font-size: 12px;
-			opacity: 0.88;
-			min-height: 16px;
+			font-size: 11px;
+			opacity: 0.9;
+			padding: 4px 8px;
+			border-radius: 999px;
+			background: rgba(255, 255, 255, 0.08);
+			min-width: 66px;
+			text-align: center;
+		}
+
+		@media (max-width: 720px) {
+			.biome-btn {
+				width: 50px;
+				height: 50px;
+				font-size: 11px;
+			}
+
+			.biome-dock {
+				gap: 8px;
+				padding: 10px;
+				bottom: 12px;
+			}
 		}
 	</style>
 </head>
 <body>
 	<div id="app"></div>
 	<div class="hud">
-		<div class="title">Wrapped Gift Terrain — Bird Flyover</div>
-			<div class="subtitle">JSON-driven cinematic camera with a Christmas wrap floor: ribbons, woven paper texture, and typographic carving for direct WebM export.</div>
-		<div class="buttons">
-			<button id="toggleFlight">Pause Flight</button>
-			<button id="recordBtn">Record 16s WebM</button>
+		<div class="controls">
+			<button id="toggleFlight" class="micro">PAUSE</button>
+			<button id="recordBtn" class="micro">REC</button>
 		</div>
-		<div class="status" id="status">Loading scene…</div>
+		<div class="status" id="status">B01</div>
+	</div>
+	<div class="biome-dock" id="biomeDock" aria-label="Biome navigation">
+		<button class="biome-btn active" data-biome="0" aria-label="Sediment biome">B01</button>
+		<button class="biome-btn" data-biome="1" aria-label="Canopy biome">B02</button>
+		<button class="biome-btn" data-biome="2" aria-label="Basalt biome">B03</button>
+		<button class="biome-btn" data-biome="3" aria-label="Ember biome">B04</button>
 	</div>
 
 	<script type="application/json" id="scene-config">
