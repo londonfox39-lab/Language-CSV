@@ -270,6 +270,8 @@
 		const statusEl = document.getElementById('status');
 		const toggleFlightBtn = document.getElementById('toggleFlight');
 		const recordBtn = document.getElementById('recordBtn');
+		const biomeDock = document.getElementById('biomeDock');
+		const biomeButtons = Array.from(document.querySelectorAll('.biome-btn'));
 
 		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 		const frac = (v) => v - Math.floor(v);
@@ -279,6 +281,89 @@
 			const t = clamp((x - a) / Math.max(1e-6, b - a), 0, 1);
 			return t * t * (3 - 2 * t);
 		};
+
+		const BIOMES = [
+			{
+				id: 'B01',
+				atmosphere: { clearColor: '#686a61', fogColor: '#8f9382', fogNear: 38, fogFar: 308, skyTop: '#666b5f', skyHorizon: '#b2b7a6' },
+				terrain: {
+					ventBlend: 0.96,
+					ventDepth: 1.18,
+					ventEdgeLift: 0.34,
+					colors: {
+						baseA: '#bba98e', baseB: '#7a624d', plaidA: '#604c39', plaidB: '#8f7156', plaidC: '#d2bda2',
+						camoA: '#3d2f27', camoB: '#65523f', camoC: '#a58b6f', wrapRed: '#7a6350', wrapGreen: '#9b8367',
+						ribbon: '#4f3f32', paperLight: '#dbc9b2', paperShadow: '#5f4a3a'
+					}
+				},
+				lights: {
+					hemiSky: '#ead9c9', hemiGround: '#2f2823', hemiIntensity: 0.54,
+					sunColor: '#ffd9bf', sunIntensity: 1.92,
+					fillColor: '#9bb2bf', fillIntensity: 0.42,
+					rakeColor: '#f2e7d8', rakeIntensity: 0.4
+				}
+			},
+			{
+				id: 'B02',
+				atmosphere: { clearColor: '#4f655c', fogColor: '#6d887b', fogNear: 28, fogFar: 248, skyTop: '#587465', skyHorizon: '#8ea99c' },
+				terrain: {
+					ventBlend: 1.0,
+					ventDepth: 1.32,
+					ventEdgeLift: 0.42,
+					colors: {
+						baseA: '#78906f', baseB: '#3f5947', plaidA: '#354a3b', plaidB: '#4f6752', plaidC: '#8ca98e',
+						camoA: '#26392e', camoB: '#415845', camoC: '#6f8b73', wrapRed: '#5a6e58', wrapGreen: '#87a285',
+						ribbon: '#2e4338', paperLight: '#bdd0b4', paperShadow: '#394d3f'
+					}
+				},
+				lights: {
+					hemiSky: '#cfebd8', hemiGround: '#223127', hemiIntensity: 0.62,
+					sunColor: '#f5f7cb', sunIntensity: 1.7,
+					fillColor: '#8db7ab', fillIntensity: 0.5,
+					rakeColor: '#d8f0cf', rakeIntensity: 0.52
+				}
+			},
+			{
+				id: 'B03',
+				atmosphere: { clearColor: '#53565d', fogColor: '#787d87', fogNear: 42, fogFar: 286, skyTop: '#585d68', skyHorizon: '#939aa6' },
+				terrain: {
+					ventBlend: 1.08,
+					ventDepth: 1.44,
+					ventEdgeLift: 0.5,
+					colors: {
+						baseA: '#9ca1a5', baseB: '#5b6068', plaidA: '#474c54', plaidB: '#656c76', plaidC: '#b3bac5',
+						camoA: '#323741', camoB: '#565d67', camoC: '#7d8691', wrapRed: '#7f8891', wrapGreen: '#98a2ad',
+						ribbon: '#444c56', paperLight: '#d0d8e2', paperShadow: '#4b525d'
+					}
+				},
+				lights: {
+					hemiSky: '#d6dde8', hemiGround: '#2b2f3a', hemiIntensity: 0.5,
+					sunColor: '#ffd8c0', sunIntensity: 1.58,
+					fillColor: '#9fb6d1', fillIntensity: 0.56,
+					rakeColor: '#e8eefb', rakeIntensity: 0.34
+				}
+			},
+			{
+				id: 'B04',
+				atmosphere: { clearColor: '#6f4f46', fogColor: '#926b5b', fogNear: 32, fogFar: 228, skyTop: '#7b5a4e', skyHorizon: '#c19984' },
+				terrain: {
+					ventBlend: 1.16,
+					ventDepth: 1.62,
+					ventEdgeLift: 0.6,
+					colors: {
+						baseA: '#ba8e73', baseB: '#6d4636', plaidA: '#6b3f31', plaidB: '#8d5b46', plaidC: '#d4a586',
+						camoA: '#4a2a21', camoB: '#784636', camoC: '#a86d56', wrapRed: '#9a4b3b', wrapGreen: '#c2795d',
+						ribbon: '#5a2d24', paperLight: '#e7c9b2', paperShadow: '#683d30'
+					}
+				},
+				lights: {
+					hemiSky: '#ffd8bd', hemiGround: '#3f241d', hemiIntensity: 0.6,
+					sunColor: '#ffd0ab', sunIntensity: 2.06,
+					fillColor: '#cf9a7b', fillIntensity: 0.42,
+					rakeColor: '#ffd9c8', rakeIntensity: 0.56
+				}
+			}
+		];
 
 		class ValueNoise {
 			constructor(seed = 12917) {
@@ -413,6 +498,10 @@
 				g: lerp(a.g, b.g, t),
 				b: lerp(a.b, b.b, t)
 			};
+		}
+
+		function cloneObject(obj) {
+			return JSON.parse(JSON.stringify(obj));
 		}
 
 		function rotate2D(x, y, radians) {
@@ -871,6 +960,12 @@
 
 		async function boot() {
 			const config = loadInlineScene();
+			const baseTerrain = cloneObject({
+				ventBlend: config.terrain.ventBlend,
+				ventDepth: config.terrain.ventDepth,
+				ventEdgeLift: config.terrain.ventEdgeLift,
+				colors: config.terrain.colors
+			});
 
 			const renderer = new THREE.WebGLRenderer({ antialias: !!config.render.antialias, powerPreference: 'high-performance' });
 			renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, config.render.pixelRatioCap || 2));
@@ -885,7 +980,8 @@
 
 			const scene = new THREE.Scene();
 			scene.fog = new THREE.Fog(config.atmosphere.fogColor, config.atmosphere.fogNear, config.atmosphere.fogFar);
-			scene.add(createSky(config));
+			const sky = createSky(config);
+			scene.add(sky);
 
 			const camera = new THREE.PerspectiveCamera(config.camera.fov, window.innerWidth / window.innerHeight, config.camera.near, config.camera.far);
 
@@ -913,7 +1009,56 @@
 			lowRake.position.set(28, 10, 62);
 			scene.add(lowRake);
 
-			buildTerrain(scene, config);
+			let terrainState = buildTerrain(scene, config);
+
+			function setSkyGradient(topHex, horizonHex) {
+				if (sky.material && sky.material.uniforms && sky.material.uniforms.topColor) {
+					sky.material.uniforms.topColor.value.set(topHex);
+					sky.material.uniforms.horizonColor.value.set(horizonHex);
+				}
+			}
+
+			function rebuildTerrain() {
+				if (terrainState && terrainState.mesh) {
+					scene.remove(terrainState.mesh);
+					terrainState.mesh.geometry.dispose();
+					if (terrainState.mesh.material.map) terrainState.mesh.material.map.dispose();
+					if (terrainState.mesh.material.bumpMap && terrainState.mesh.material.bumpMap !== terrainState.mesh.material.map) {
+						terrainState.mesh.material.bumpMap.dispose();
+					}
+					terrainState.mesh.material.dispose();
+				}
+				terrainState = buildTerrain(scene, config);
+			}
+
+			function applyBiome(index) {
+				const biome = BIOMES[index] || BIOMES[0];
+				config.terrain.colors = Object.assign({}, baseTerrain.colors, biome.terrain.colors || {});
+				config.terrain.ventBlend = biome.terrain.ventBlend ?? baseTerrain.ventBlend;
+				config.terrain.ventDepth = biome.terrain.ventDepth ?? baseTerrain.ventDepth;
+				config.terrain.ventEdgeLift = biome.terrain.ventEdgeLift ?? baseTerrain.ventEdgeLift;
+
+				scene.fog.color.set(biome.atmosphere.fogColor);
+				scene.fog.near = biome.atmosphere.fogNear;
+				scene.fog.far = biome.atmosphere.fogFar;
+				renderer.setClearColor(biome.atmosphere.clearColor, 1);
+				setSkyGradient(biome.atmosphere.skyTop, biome.atmosphere.skyHorizon);
+
+				hemi.color.set(biome.lights.hemiSky);
+				hemi.groundColor.set(biome.lights.hemiGround);
+				hemi.intensity = biome.lights.hemiIntensity;
+				sun.color.set(biome.lights.sunColor);
+				sun.intensity = biome.lights.sunIntensity;
+				fill.color.set(biome.lights.fillColor);
+				fill.intensity = biome.lights.fillIntensity;
+				lowRake.color.set(biome.lights.rakeColor);
+				lowRake.intensity = biome.lights.rakeIntensity;
+
+				biomeButtons.forEach((btn, i) => btn.classList.toggle('active', i === index));
+				activeBiomeId = biome.id;
+				statusEl.textContent = biome.id;
+				rebuildTerrain();
+			}
 
 			config.forms.ringClusters.forEach((cluster) => ringCluster(scene, cluster));
 			boneArcs(scene, config.forms.boneArcs);
@@ -924,6 +1069,7 @@
 			let paused = false;
 			let tAccum = 0;
 			let recording = false;
+			let activeBiomeId = 'B01';
 
 			function setStatus(text) {
 				statusEl.textContent = text;
@@ -931,20 +1077,20 @@
 
 			toggleFlightBtn.addEventListener('click', () => {
 				paused = !paused;
-				toggleFlightBtn.textContent = paused ? 'Resume Flight' : 'Pause Flight';
-				setStatus(paused ? 'Flight paused.' : 'Flight running.');
+				toggleFlightBtn.textContent = paused ? 'PLAY' : 'PAUSE';
+				setStatus(paused ? 'STOP' : activeBiomeId);
 			});
 
 			async function recordFlight() {
 				if (recording) return;
 				if (!('MediaRecorder' in window)) {
-					setStatus('MediaRecorder is not supported in this browser.');
+					setStatus('NOREC');
 					return;
 				}
 
 				recording = true;
 				recordBtn.disabled = true;
-				setStatus('Recording WebM… keep this tab visible.');
+				setStatus('REC');
 
 				const stream = renderer.domElement.captureStream(60);
 				const chunks = [];
@@ -967,7 +1113,7 @@
 					URL.revokeObjectURL(url);
 					recording = false;
 					recordBtn.disabled = false;
-					setStatus('Recording exported.');
+					setStatus(activeBiomeId);
 				};
 
 				recorder.start(100);
@@ -976,7 +1122,16 @@
 			}
 
 			recordBtn.addEventListener('click', recordFlight);
-			setStatus(`Scene ready — ${duration}s loop. Use Record to export.`);
+
+			biomeDock.addEventListener('click', (event) => {
+				const target = event.target.closest('.biome-btn');
+				if (!target) return;
+				const biomeIndex = Number(target.dataset.biome);
+				if (Number.isNaN(biomeIndex)) return;
+				applyBiome(clamp(biomeIndex, 0, BIOMES.length - 1));
+			});
+
+			applyBiome(0);
 
 			function animate() {
 				requestAnimationFrame(animate);
