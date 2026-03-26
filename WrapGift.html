@@ -702,6 +702,14 @@
 			});
 		}
 
+		async function loadBiome4MeshAsset() {
+			return loadObjAsset('assets/biome4/red green /1_11_2026.obj', {
+				color: '#8f7d68',
+				roughness: 0.86,
+				metalness: 0.02
+			});
+		}
+
 		function buildBiome2Vegetation(group, terrain, noise, asset, options = {}) {
 			if (!asset || !asset.geometry || !asset.material) return;
 
@@ -1464,6 +1472,7 @@
 			const biome2TreeAsset = await loadBiome2TreeAsset();
 			const biome2OregonAsset = await loadBiome2OregonAsset();
 			const biome2SecondBushAsset = await loadBiome2SecondBushAsset();
+			const biome4MeshAsset = await loadBiome4MeshAsset();
 			const baseTerrain = cloneObject({
 				ventBlend: config.terrain.ventBlend,
 				ventDepth: config.terrain.ventDepth,
@@ -1515,6 +1524,8 @@
 
 			const biome2VegetationGroup = new THREE.Group();
 			scene.add(biome2VegetationGroup);
+			const biome4VegetationGroup = new THREE.Group();
+			scene.add(biome4VegetationGroup);
 
 			let terrainState = buildTerrain(scene, config);
 			let ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
@@ -1537,6 +1548,14 @@
 				while (biome2VegetationGroup.children.length > 0) {
 					const child = biome2VegetationGroup.children[0];
 					biome2VegetationGroup.remove(child);
+					if (child.material) {
+						if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+						else child.material.dispose();
+					}
+				}
+				while (biome4VegetationGroup.children.length > 0) {
+					const child = biome4VegetationGroup.children[0];
+					biome4VegetationGroup.remove(child);
 					if (child.material) {
 						if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
 						else child.material.dispose();
@@ -1601,6 +1620,22 @@
 						embedDepthMin: 0.38,
 						embedDepthMax: 1.0,
 						emergeLift: 0.12
+					});
+				}
+
+				if (activeBiomeId === 'B04') {
+					buildBiome2Vegetation(biome4VegetationGroup, config.terrain, terrainState.noise, biome4MeshAsset, {
+						count: 360,
+						ringMinRatio: 0.2,
+						ringMaxRatio: 0.98,
+						jitter: 18,
+						scaleMin: 0.052,
+						scaleMax: 0.138,
+						avoidCenter: 10,
+						embedRatio: 0.38,
+						embedDepthMin: 0.32,
+						embedDepthMax: 0.95,
+						emergeLift: 0.14
 					});
 				}
 			}
