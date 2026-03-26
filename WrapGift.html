@@ -305,7 +305,7 @@
 			},
 			{
 				id: 'B02',
-				atmosphere: { clearColor: '#5f655f', fogColor: '#81847f', fogNear: 30, fogFar: 242, skyTop: '#676f69', skyHorizon: '#9ca298' },
+				atmosphere: { clearColor: '#5f655f', fogColor: '#81847f', fogNear: 30, fogFar: 242, skyTop: '#676f69', skyHorizon: '#9ca298', skyTexture: 'assets/biome2/sky-reference.png' },
 				terrain: {
 					ventBlend: 1.15,
 					ventDepth: 1.52,
@@ -536,7 +536,12 @@
 				side: THREE.BackSide,
 				uniforms: {
 					topColor: { value: top },
-					horizonColor: { value: horizon }
+					horizonColor: { value: horizon },
+					skyTex: { value: null },
+					useSkyTex: { value: 0 },
+					ventImprintStrength: { value: 0 },
+					ventImprintColor: { value: new THREE.Color('#ece2cf') },
+					skyTime: { value: 0 }
 				},
 				vertexShader: `
 					varying vec3 vWorldPos;
@@ -550,9 +555,40 @@
 					varying vec3 vWorldPos;
 					uniform vec3 topColor;
 					uniform vec3 horizonColor;
+					uniform sampler2D skyTex;
+					uniform float useSkyTex;
+					uniform float ventImprintStrength;
+					uniform vec3 ventImprintColor;
+					uniform float skyTime;
 					void main() {
-						float h = normalize(vWorldPos).y * 0.5 + 0.5;
+						vec3 dir = normalize(vWorldPos);
+						float h = dir.y * 0.5 + 0.5;
 						vec3 col = mix(horizonColor, topColor, smoothstep(0.18, 1.0, h));
+
+						vec2 skyUv = vec2(atan(dir.z, dir.x) / (6.28318530718) + 0.5, asin(clamp(dir.y, -1.0, 1.0)) / 3.14159265359 + 0.5);
+						if (useSkyTex > 0.5) {
+							vec3 texCol = texture2D(skyTex, skyUv).rgb;
+							col = mix(col, texCol, 0.62);
+						}
+
+						vec2 p = skyUv - 0.5;
+						p.y *= 1.35;
+						float radius = length(p);
+						float ringOuter = 1.0 - smoothstep(0.40, 0.46, radius);
+						float ringInner = 1.0 - smoothstep(0.28, 0.34, radius);
+						float ring = clamp(ringOuter - ringInner, 0.0, 1.0);
+
+						float fanAngle = atan(p.y, p.x) + skyTime * 0.08;
+						float blade = pow(max(0.0, cos(fanAngle * 8.0 + radius * 19.0)), 3.4) * (1.0 - smoothstep(0.08, 0.34, radius));
+
+						float leftRail = 1.0 - smoothstep(0.008, 0.022, abs(p.x + 0.34));
+						float rightRail = 1.0 - smoothstep(0.008, 0.022, abs(p.x - 0.34));
+						float rails = max(leftRail, rightRail) * (1.0 - smoothstep(0.38, 0.53, abs(p.y)));
+
+						float ventShape = clamp(ring * 0.85 + blade * 0.95 + rails * 0.42, 0.0, 1.0) * ventImprintStrength;
+						col = mix(col, ventImprintColor, ventShape * 0.48);
+						col *= 1.0 - ventShape * 0.11;
+
 						gl_FragColor = vec4(col, 1.0);
 					}
 				`
@@ -577,12 +613,8 @@
 					);
 					tex.center.set(0.5, 0.5);
 					tex.rotation = (sceneConfig.atmosphere.skyTextureRotationDeg || 0) * Math.PI / 180;
-
-					sky.material.dispose();
-					sky.material = new THREE.MeshBasicMaterial({
-						side: THREE.BackSide,
-						map: tex
-					});
+					sky.material.uniforms.skyTex.value = tex;
+					sky.material.uniforms.useSkyTex.value = 1;
 				},
 				undefined,
 				() => {
@@ -1091,6 +1123,103 @@
 			return g;
 		}
 
+		function disposeGroup(root) {
+			const materials = new Set();
+			root.traverse((obj) => {
+				if (obj.geometry) obj.geometry.dispose();
+				if (obj.material) {
+					if (Array.isArray(obj.material)) obj.material.forEach((m) => materials.add(m));
+					else materials.add(obj.material);
+				}
+			});
+			materials.forEach((m) => m.dispose());
+		}
+
+		function buildEmbeddedVentInstallations(scene, terrain, noise) {
+			const vents = Array.isArray(terrain.vents) ? terrain.vents : [];
+			const installations = [];
+
+			for (let i = 0; i < vents.length; i++) {
+				const vent = vents[i];
+				const cx = vent.position?.[0] || 0;
+				const cz = vent.position?.[2] || 0;
+				const rotY = ((vent.rotationDeg || 0) * Math.PI) / 180;
+				const baseY = heightAt(noise, cx, cz, terrain);
+
+				const g = new THREE.Group();
+				g.position.set(cx, baseY + 0.34, cz);
+				g.rotation.y = rotY;
+
+				const ventW = Math.max(8, vent.size?.[0] || 20);
+				const ventD = Math.max(8, vent.size?.[1] || 12);
+				const plateSize = Math.max(ventW, ventD) * 0.92;
+
+				const plateMat = new THREE.MeshStandardMaterial({ color: '#c9ab86', roughness: 0.82, metalness: 0.05 });
+				const ringMat = new THREE.MeshStandardMaterial({ color: '#ece3d2', roughness: 0.58, metalness: 0.03 });
+				const bladeMat = new THREE.MeshStandardMaterial({ color: '#b89974', roughness: 0.72, metalness: 0.06 });
+				const screwMat = new THREE.MeshStandardMaterial({ color: '#bfc3c9', roughness: 0.34, metalness: 0.72 });
+
+				const plate = new THREE.Mesh(new THREE.BoxGeometry(plateSize, 0.56, plateSize), plateMat);
+				plate.castShadow = true;
+				plate.receiveShadow = true;
+				g.add(plate);
+
+				const ringRadius = plateSize * 0.42;
+				const ring = new THREE.Mesh(new THREE.CylinderGeometry(ringRadius, ringRadius, 0.12, 48), ringMat);
+				ring.position.y = 0.3;
+				ring.castShadow = true;
+				g.add(ring);
+
+				const cavity = new THREE.Mesh(new THREE.CylinderGeometry(ringRadius * 0.92, ringRadius * 0.92, 0.1, 48), new THREE.MeshStandardMaterial({ color: '#f0e7d6', roughness: 0.42, metalness: 0.02 }));
+				cavity.position.y = 0.24;
+				g.add(cavity);
+
+				const rotor = new THREE.Group();
+				rotor.position.y = 0.28;
+				g.add(rotor);
+
+				for (let b = 0; b < 8; b++) {
+					const blade = new THREE.Mesh(new THREE.BoxGeometry(ringRadius * 0.72, 0.06, ringRadius * 0.22), bladeMat);
+					const angle = (b / 8) * Math.PI * 2;
+					const rr = ringRadius * 0.38;
+					blade.position.set(Math.cos(angle) * rr, 0.01, Math.sin(angle) * rr);
+					blade.rotation.y = angle + Math.PI * 0.24;
+					blade.rotation.x = -0.1;
+					rotor.add(blade);
+				}
+
+				const hub = new THREE.Mesh(new THREE.CylinderGeometry(ringRadius * 0.34, ringRadius * 0.34, 0.2, 30), bladeMat);
+				hub.position.y = 0.04;
+				hub.castShadow = true;
+				rotor.add(hub);
+
+				const sideOffset = plateSize * 0.72;
+				for (const side of [-1, 1]) {
+					for (let s = 0; s < 2; s++) {
+						const slit = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, plateSize * 0.86), ringMat);
+						slit.position.set(side * sideOffset + s * 0.34 * side, 0.28, 0);
+						slit.castShadow = true;
+						g.add(slit);
+					}
+				}
+
+				const sx = plateSize * 0.42;
+				const sz = plateSize * 0.42;
+				const screwPositions = [[-sx, -sz], [sx, -sz], [sx, sz], [-sx, sz]];
+				for (const p of screwPositions) {
+					const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.08, 16), screwMat);
+					screw.position.set(p[0], 0.34, p[1]);
+					screw.rotation.x = Math.PI * 0.5;
+					g.add(screw);
+				}
+
+				scene.add(g);
+				installations.push({ group: g, rotor, phase: i * 1.17, baseY: g.position.y });
+			}
+
+			return installations;
+		}
+
 		function tToSegment(path, t) {
 			const arr = path;
 			if (t <= arr[0].t) return { i: 0, lt: 0 };
@@ -1161,6 +1290,7 @@
 			scene.add(lowRake);
 
 			let terrainState = buildTerrain(scene, config);
+			let ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
 
 			function setSkyGradient(topHex, horizonHex) {
 				if (sky.material && sky.material.uniforms && sky.material.uniforms.topColor) {
@@ -1169,7 +1299,22 @@
 				}
 			}
 
+			function setSkyVentImprint(strength, colorHex) {
+				if (sky.material && sky.material.uniforms && sky.material.uniforms.ventImprintStrength) {
+					sky.material.uniforms.ventImprintStrength.value = strength;
+					sky.material.uniforms.ventImprintColor.value.set(colorHex);
+				}
+			}
+
 			function rebuildTerrain() {
+				if (ventInstallations.length > 0) {
+					ventInstallations.forEach((entry) => {
+						scene.remove(entry.group);
+						disposeGroup(entry.group);
+					});
+					ventInstallations = [];
+				}
+
 				if (terrainState && terrainState.mesh) {
 					scene.remove(terrainState.mesh);
 					terrainState.mesh.geometry.dispose();
@@ -1180,6 +1325,7 @@
 					terrainState.mesh.material.dispose();
 				}
 				terrainState = buildTerrain(scene, config);
+				ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
 			}
 
 			function applyBiome(index) {
@@ -1210,6 +1356,7 @@
 				scene.fog.far = biome.atmosphere.fogFar;
 				renderer.setClearColor(biome.atmosphere.clearColor, 1);
 				setSkyGradient(biome.atmosphere.skyTop, biome.atmosphere.skyHorizon);
+				setSkyVentImprint(biome.id === 'B02' ? 0.72 : 0.0, biome.id === 'B02' ? '#e9ddc9' : '#ece2cf');
 
 				hemi.color.set(biome.lights.hemiSky);
 				hemi.groundColor.set(biome.lights.hemiGround);
@@ -1326,6 +1473,16 @@
 
 				bird.rotation.y = Math.sin(tAccum * 0.35) * 0.25;
 				bird.position.y = config.forms.crystalBird.position[1] + Math.sin(tAccum * 0.6) * 0.22;
+
+				for (const ventEntry of ventInstallations) {
+					const phase = tAccum * 1.8 + ventEntry.phase;
+					ventEntry.rotor.rotation.y = phase;
+					ventEntry.group.position.y = ventEntry.baseY + Math.sin(phase * 0.7) * 0.05;
+				}
+
+				if (sky.material && sky.material.uniforms && sky.material.uniforms.skyTime) {
+					sky.material.uniforms.skyTime.value = tAccum;
+				}
 
 				renderer.render(scene, camera);
 			}
