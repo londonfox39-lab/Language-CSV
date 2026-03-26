@@ -558,6 +558,113 @@
 			return buildReferenceTexturePack(loaded.slice(0, 3), 1024);
 		}
 
+		function parseObjGeometry(text) {
+			const positions = [];
+			const indices = [];
+
+			const lines = text.split(/\r?\n/);
+			for (const raw of lines) {
+				const line = raw.trim();
+				if (!line || line.startsWith('#')) continue;
+
+				if (line.startsWith('v ')) {
+					const p = line.split(/\s+/);
+					if (p.length >= 4) {
+						positions.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+					}
+					continue;
+				}
+
+				if (line.startsWith('f ')) {
+					const p = line.split(/\s+/).slice(1);
+					if (p.length < 3) continue;
+
+					const face = [];
+					for (const token of p) {
+						const idx = token.split('/')[0];
+						const vi = parseInt(idx, 10);
+						if (Number.isFinite(vi)) {
+							face.push(vi > 0 ? vi - 1 : (positions.length / 3) + vi);
+						}
+					}
+
+					for (let i = 1; i < face.length - 1; i++) {
+						indices.push(face[0], face[i], face[i + 1]);
+					}
+				}
+			}
+
+			if (positions.length === 0 || indices.length === 0) {
+				return null;
+			}
+
+			const g = new THREE.BufferGeometry();
+			g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+			g.setIndex(indices);
+			g.computeVertexNormals();
+
+			g.computeBoundingBox();
+			const box = g.boundingBox;
+			const cx = (box.min.x + box.max.x) * 0.5;
+			const cz = (box.min.z + box.max.z) * 0.5;
+			g.translate(-cx, -box.min.y, -cz);
+			g.computeBoundingSphere();
+
+			return g;
+		}
+
+		async function loadBiome2TreeGeometry() {
+			try {
+				const res = await fetch('assets/biome2/tree/tree.obj');
+				if (!res.ok) return null;
+				const text = await res.text();
+				return parseObjGeometry(text);
+			} catch (error) {
+				console.warn('Biome 2 tree OBJ failed to load.', error);
+				return null;
+			}
+		}
+
+		function buildBiome2Vegetation(group, terrain, noise, treeGeometry) {
+			if (!treeGeometry) return;
+
+			const count = 180;
+			const treeMat = new THREE.MeshStandardMaterial({
+				color: '#7f725f',
+				roughness: 0.88,
+				metalness: 0.02
+			});
+			const instanced = new THREE.InstancedMesh(treeGeometry, treeMat, count);
+			instanced.castShadow = true;
+			instanced.receiveShadow = true;
+
+			const half = terrain.size * 0.5;
+			const ringMin = half * 0.36;
+			const ringMax = half * 0.96;
+			const dummy = new THREE.Object3D();
+
+			for (let i = 0; i < count; i++) {
+				const r0 = frac(Math.sin((i + 1) * 78.233) * 43758.5453123);
+				const r1 = frac(Math.sin((i + 1) * 17.147) * 9653.1427);
+				const r2 = frac(Math.sin((i + 1) * 49.631) * 16453.9152);
+				const a = r0 * Math.PI * 2;
+				const rad = lerp(ringMin, ringMax, Math.pow(r1, 0.72));
+				const x = Math.cos(a) * rad + (r2 - 0.5) * 12;
+				const z = Math.sin(a) * rad + (r0 - 0.5) * 12;
+				const y = heightAt(noise, x, z, terrain);
+
+				const s = lerp(0.032, 0.072, frac(Math.sin((i + 1) * 93.119) * 7723.551));
+				dummy.position.set(x, y, z);
+				dummy.rotation.set(0, a + r1 * Math.PI, 0);
+				dummy.scale.setScalar(s);
+				dummy.updateMatrix();
+				instanced.setMatrixAt(i, dummy.matrix);
+			}
+
+			instanced.instanceMatrix.needsUpdate = true;
+			group.add(instanced);
+		}
+
 		function createSky(sceneConfig) {
 			const top = new THREE.Color(sceneConfig.atmosphere.skyTop);
 			const horizon = new THREE.Color(sceneConfig.atmosphere.skyHorizon);
@@ -1265,6 +1372,7 @@
 			const config = loadInlineScene();
 			const biome2Reference = await loadBiome2ReferencePack();
 			const biome4Reference = await loadBiome4ReferencePack();
+			const biome2TreeGeometry = await loadBiome2TreeGeometry();
 			const baseTerrain = cloneObject({
 				ventBlend: config.terrain.ventBlend,
 				ventDepth: config.terrain.ventDepth,
@@ -1314,6 +1422,9 @@
 			lowRake.position.set(28, 10, 62);
 			scene.add(lowRake);
 
+			const biome2VegetationGroup = new THREE.Group();
+			scene.add(biome2VegetationGroup);
+
 			let terrainState = buildTerrain(scene, config);
 			let ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
 
@@ -1332,6 +1443,15 @@
 			}
 
 			function rebuildTerrain() {
+				while (biome2VegetationGroup.children.length > 0) {
+					const child = biome2VegetationGroup.children[0];
+					biome2VegetationGroup.remove(child);
+					if (child.material) {
+						if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+						else child.material.dispose();
+					}
+				}
+
 				if (ventInstallations.length > 0) {
 					ventInstallations.forEach((entry) => {
 						scene.remove(entry.group);
@@ -1351,6 +1471,10 @@
 				}
 				terrainState = buildTerrain(scene, config);
 				ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
+
+				if (activeBiomeId === 'B02' && biome2TreeGeometry) {
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2TreeGeometry);
+				}
 			}
 
 			function applyBiome(index) {
