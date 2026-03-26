@@ -528,6 +528,36 @@
 			return buildReferenceTexturePack(loaded.slice(0, 3), 1024);
 		}
 
+		async function loadBiome4ReferencePack() {
+			const candidates = [
+				'assets/biome4/viewcapture-1.jpg',
+				'assets/biome4/viewcapture-2.jpg',
+				'assets/biome4/viewcapture-3.jpg',
+				'assets/biome4/viewcapture-1.png',
+				'assets/biome4/viewcapture-2.png',
+				'assets/biome4/viewcapture-3.png',
+				'assets/biome4/utah-monolith.jpg',
+				'assets/biome4/utah-monolith.png'
+			];
+
+			const loaded = [];
+			for (const path of candidates) {
+				try {
+					const tex = await loadImageToCanvasTexture(path);
+					loaded.push(textureToCanvas(tex, 1024));
+					tex.dispose();
+				} catch (_) {
+					// Ignore missing files; this allows drop-in reference updates later.
+				}
+			}
+
+			if (loaded.length === 0) {
+				return null;
+			}
+
+			return buildReferenceTexturePack(loaded.slice(0, 3), 1024);
+		}
+
 		function createSky(sceneConfig) {
 			const top = new THREE.Color(sceneConfig.atmosphere.skyTop);
 			const horizon = new THREE.Color(sceneConfig.atmosphere.skyHorizon);
@@ -1234,6 +1264,7 @@
 		async function boot() {
 			const config = loadInlineScene();
 			const biome2Reference = await loadBiome2ReferencePack();
+			const biome4Reference = await loadBiome4ReferencePack();
 			const baseTerrain = cloneObject({
 				ventBlend: config.terrain.ventBlend,
 				ventDepth: config.terrain.ventDepth,
@@ -1336,6 +1367,13 @@
 					config.terrain.referenceRepeatX = 1.5;
 					config.terrain.referenceRepeatY = 1.35;
 					config.terrain.referenceRelief = 0.72;
+				} else if (biome.id === 'B04' && biome4Reference) {
+					config.terrain.referenceTexture = biome4Reference.texture;
+					config.terrain.referenceHeight = biome4Reference.height;
+					config.terrain.referenceSize = biome4Reference.size;
+					config.terrain.referenceRepeatX = 1.2;
+					config.terrain.referenceRepeatY = 1.2;
+					config.terrain.referenceRelief = 0.82;
 				} else {
 					config.terrain.referenceTexture = null;
 					config.terrain.referenceHeight = null;
