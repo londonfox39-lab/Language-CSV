@@ -568,7 +568,7 @@
 						vec2 skyUv = vec2(atan(dir.z, dir.x) / (6.28318530718) + 0.5, asin(clamp(dir.y, -1.0, 1.0)) / 3.14159265359 + 0.5);
 						if (useSkyTex > 0.5) {
 							vec3 texCol = texture2D(skyTex, skyUv).rgb;
-							col = mix(col, texCol, 0.62);
+							col = texCol;
 						}
 
 						vec2 p = skyUv - 0.5;
@@ -605,14 +605,8 @@
 				texturePath,
 				(tex) => {
 					tex.colorSpace = THREE.SRGBColorSpace;
-					tex.wrapS = THREE.RepeatWrapping;
-					tex.wrapT = THREE.RepeatWrapping;
-					tex.repeat.set(
-						sceneConfig.atmosphere.skyTextureRepeatX || 1,
-						sceneConfig.atmosphere.skyTextureRepeatY || 1
-					);
-					tex.center.set(0.5, 0.5);
-					tex.rotation = (sceneConfig.atmosphere.skyTextureRotationDeg || 0) * Math.PI / 180;
+					tex.wrapS = THREE.ClampToEdgeWrapping;
+					tex.wrapT = THREE.ClampToEdgeWrapping;
 					sky.material.uniforms.skyTex.value = tex;
 					sky.material.uniforms.useSkyTex.value = 1;
 				},
