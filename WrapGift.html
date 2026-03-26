@@ -715,6 +715,13 @@
 
 			const count = options.count ?? 180;
 			const material = asset.material.clone();
+			if (options.materialColor) material.color.set(options.materialColor);
+			material.color.multiplyScalar(options.colorGain ?? 1.0);
+			if (options.emissive) material.emissive.set(options.emissive);
+			if (options.emissiveIntensity !== undefined) material.emissiveIntensity = options.emissiveIntensity;
+			if (options.roughness !== undefined) material.roughness = options.roughness;
+			if (options.metalness !== undefined) material.metalness = options.metalness;
+			material.needsUpdate = true;
 			const instanced = new THREE.InstancedMesh(asset.geometry, material, count);
 			instanced.castShadow = true;
 			instanced.receiveShadow = true;
@@ -1625,17 +1632,23 @@
 
 				if (activeBiomeId === 'B04') {
 					buildBiome2Vegetation(biome4VegetationGroup, config.terrain, terrainState.noise, biome4MeshAsset, {
-						count: 360,
-						ringMinRatio: 0.2,
-						ringMaxRatio: 0.98,
-						jitter: 18,
-						scaleMin: 0.052,
-						scaleMax: 0.138,
-						avoidCenter: 10,
-						embedRatio: 0.38,
-						embedDepthMin: 0.32,
-						embedDepthMax: 0.95,
-						emergeLift: 0.14
+						count: 30,
+						ringMinRatio: 0.0,
+						ringMaxRatio: 1.0,
+						jitter: 10,
+						scaleMin: 22.0,
+						scaleMax: 56.0,
+						avoidCenter: 0,
+						embedRatio: 0.18,
+						embedDepthMin: 0.08,
+						embedDepthMax: 0.3,
+						emergeLift: 0.45,
+						materialColor: '#f0e6d3',
+						colorGain: 1.6,
+						emissive: '#5b4e3f',
+						emissiveIntensity: 0.34,
+						roughness: 0.66,
+						metalness: 0.0
 					});
 				}
 			}
