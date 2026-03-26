@@ -1350,7 +1350,7 @@
 				scene.fog.far = biome.atmosphere.fogFar;
 				renderer.setClearColor(biome.atmosphere.clearColor, 1);
 				setSkyGradient(biome.atmosphere.skyTop, biome.atmosphere.skyHorizon);
-				setSkyVentImprint(biome.id === 'B02' ? 0.72 : 0.0, biome.id === 'B02' ? '#e9ddc9' : '#ece2cf');
+				setSkyVentImprint(0.0, '#ece2cf');
 
 				hemi.color.set(biome.lights.hemiSky);
 				hemi.groundColor.set(biome.lights.hemiGround);
