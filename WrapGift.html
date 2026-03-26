@@ -718,6 +718,10 @@
 			const scaleMin = options.scaleMin ?? 0.032;
 			const scaleMax = options.scaleMax ?? 0.072;
 			const avoidCenter = options.avoidCenter ?? 16;
+			const embedRatio = options.embedRatio ?? 0.0;
+			const embedDepthMin = options.embedDepthMin ?? 0.0;
+			const embedDepthMax = options.embedDepthMax ?? 0.0;
+			const emergeLift = options.emergeLift ?? 0.0;
 			const dummy = new THREE.Object3D();
 
 			for (let i = 0; i < count; i++) {
@@ -729,9 +733,18 @@
 				const x = Math.cos(a) * rad + (r2 - 0.5) * jitter;
 				const z = Math.sin(a) * rad + (r0 - 0.5) * jitter;
 				if (Math.abs(x) < avoidCenter && Math.abs(z) < avoidCenter) continue;
-				const y = heightAt(noise, x, z, terrain);
+				let y = heightAt(noise, x, z, terrain);
 
 				const s = lerp(scaleMin, scaleMax, frac(Math.sin((i + 1) * 93.119) * 7723.551));
+				const buried = frac(Math.sin((i + 1) * 131.771) * 19417.337) < embedRatio;
+				if (buried) {
+					const depthT = frac(Math.sin((i + 1) * 57.713) * 9817.115);
+					const buryDepth = lerp(embedDepthMin, embedDepthMax, depthT) * s;
+					y -= buryDepth;
+				} else {
+					y += emergeLift * s;
+				}
+
 				dummy.position.set(x, y, z);
 				dummy.rotation.set(0, a + r1 * Math.PI, 0);
 				dummy.scale.setScalar(s);
@@ -1557,7 +1570,11 @@
 						ringMaxRatio: 0.98,
 						scaleMin: 0.03,
 						scaleMax: 0.068,
-						avoidCenter: 20
+						avoidCenter: 20,
+						embedRatio: 0.34,
+						embedDepthMin: 0.35,
+						embedDepthMax: 0.9,
+						emergeLift: 0.16
 					});
 					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2OregonAsset, {
 						count: 320,
@@ -1566,7 +1583,11 @@
 						jitter: 16,
 						scaleMin: 0.05,
 						scaleMax: 0.122,
-						avoidCenter: 10
+						avoidCenter: 10,
+						embedRatio: 0.48,
+						embedDepthMin: 0.42,
+						embedDepthMax: 1.1,
+						emergeLift: 0.09
 					});
 					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2SecondBushAsset, {
 						count: 220,
@@ -1575,7 +1596,11 @@
 						jitter: 14,
 						scaleMin: 0.045,
 						scaleMax: 0.11,
-						avoidCenter: 12
+						avoidCenter: 12,
+						embedRatio: 0.41,
+						embedDepthMin: 0.38,
+						embedDepthMax: 1.0,
+						emergeLift: 0.12
 					});
 				}
 			}
