@@ -153,15 +153,12 @@
 	<div class="hud">
 		<div class="controls">
 			<button id="toggleFlight" class="micro">PAUSE</button>
-			<button id="recordBtn" class="micro">REC</button>
 		</div>
-		<div class="status" id="status">B01</div>
+		<div class="status" id="status">B02</div>
 	</div>
 	<div class="biome-dock" id="biomeDock" aria-label="Biome navigation">
-		<button class="biome-btn" data-biome="0" aria-label="Sediment biome">B01</button>
-		<button class="biome-btn active" data-biome="1" aria-label="Rhino biome">B02</button>
-		<button class="biome-btn" data-biome="2" aria-label="Basalt biome">B03</button>
-		<button class="biome-btn" data-biome="3" aria-label="Ember biome">B04</button>
+		<button class="biome-btn active" data-biome="0" aria-label="Rhino biome">B02</button>
+		<button class="biome-btn" data-biome="1" aria-label="Ember biome">B04</button>
 	</div>
 
 	<script type="application/json" id="scene-config">
@@ -269,7 +266,6 @@
 		const app = document.getElementById('app');
 		const statusEl = document.getElementById('status');
 		const toggleFlightBtn = document.getElementById('toggleFlight');
-		const recordBtn = document.getElementById('recordBtn');
 		const biomeDock = document.getElementById('biomeDock');
 		const biomeButtons = Array.from(document.querySelectorAll('.biome-btn'));
 
@@ -283,26 +279,6 @@
 		};
 
 		const BIOMES = [
-			{
-				id: 'B01',
-				atmosphere: { clearColor: '#686a61', fogColor: '#8f9382', fogNear: 38, fogFar: 308, skyTop: '#666b5f', skyHorizon: '#b2b7a6' },
-				terrain: {
-					ventBlend: 0.96,
-					ventDepth: 1.18,
-					ventEdgeLift: 0.34,
-					colors: {
-						baseA: '#bba98e', baseB: '#7a624d', plaidA: '#604c39', plaidB: '#8f7156', plaidC: '#d2bda2',
-						camoA: '#3d2f27', camoB: '#65523f', camoC: '#a58b6f', wrapRed: '#7a6350', wrapGreen: '#9b8367',
-						ribbon: '#4f3f32', paperLight: '#dbc9b2', paperShadow: '#5f4a3a'
-					}
-				},
-				lights: {
-					hemiSky: '#ead9c9', hemiGround: '#2f2823', hemiIntensity: 0.54,
-					sunColor: '#ffd9bf', sunIntensity: 1.92,
-					fillColor: '#9bb2bf', fillIntensity: 0.42,
-					rakeColor: '#f2e7d8', rakeIntensity: 0.4
-				}
-			},
 			{
 				id: 'B02',
 				atmosphere: { clearColor: '#5f655f', fogColor: '#81847f', fogNear: 30, fogFar: 242, skyTop: '#676f69', skyHorizon: '#9ca298', skyTexture: 'assets/biome2/sky-reference.png' },
@@ -321,26 +297,6 @@
 					sunColor: '#ffe5c4', sunIntensity: 1.84,
 					fillColor: '#a3acb0', fillIntensity: 0.48,
 					rakeColor: '#efe7d7', rakeIntensity: 0.58
-				}
-			},
-			{
-				id: 'B03',
-				atmosphere: { clearColor: '#53565d', fogColor: '#787d87', fogNear: 42, fogFar: 286, skyTop: '#585d68', skyHorizon: '#939aa6' },
-				terrain: {
-					ventBlend: 1.08,
-					ventDepth: 1.44,
-					ventEdgeLift: 0.5,
-					colors: {
-						baseA: '#9ca1a5', baseB: '#5b6068', plaidA: '#474c54', plaidB: '#656c76', plaidC: '#b3bac5',
-						camoA: '#323741', camoB: '#565d67', camoC: '#7d8691', wrapRed: '#7f8891', wrapGreen: '#98a2ad',
-						ribbon: '#444c56', paperLight: '#d0d8e2', paperShadow: '#4b525d'
-					}
-				},
-				lights: {
-					hemiSky: '#d6dde8', hemiGround: '#2b2f3a', hemiIntensity: 0.5,
-					sunColor: '#ffd8c0', sunIntensity: 1.58,
-					fillColor: '#9fb6d1', fillIntensity: 0.56,
-					rakeColor: '#e8eefb', rakeIntensity: 0.34
 				}
 			},
 			{
@@ -559,8 +515,18 @@
 		}
 
 		function parseObjGeometry(text) {
-			const positions = [];
-			const indices = [];
+			const objPos = [];
+			const objUv = [];
+			const triPos = [];
+			const triUv = [];
+			let hasAnyUv = false;
+
+			const resolveIndex = (value, count) => {
+				if (!value) return -1;
+				const n = parseInt(value, 10);
+				if (!Number.isFinite(n) || n === 0) return -1;
+				return n > 0 ? n - 1 : count + n;
+			};
 
 			const lines = text.split(/\r?\n/);
 			for (const raw of lines) {
@@ -570,37 +536,56 @@
 				if (line.startsWith('v ')) {
 					const p = line.split(/\s+/);
 					if (p.length >= 4) {
-						positions.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+						objPos.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+					}
+					continue;
+				}
+
+				if (line.startsWith('vt ')) {
+					const p = line.split(/\s+/);
+					if (p.length >= 3) {
+						objUv.push(parseFloat(p[1]), parseFloat(p[2]));
 					}
 					continue;
 				}
 
 				if (line.startsWith('f ')) {
-					const p = line.split(/\s+/).slice(1);
-					if (p.length < 3) continue;
+					const tokens = line.split(/\s+/).slice(1);
+					if (tokens.length < 3) continue;
 
 					const face = [];
-					for (const token of p) {
-						const idx = token.split('/')[0];
-						const vi = parseInt(idx, 10);
-						if (Number.isFinite(vi)) {
-							face.push(vi > 0 ? vi - 1 : (positions.length / 3) + vi);
-						}
+					for (const token of tokens) {
+						const parts = token.split('/');
+						const vi = resolveIndex(parts[0], objPos.length / 3);
+						const ti = resolveIndex(parts[1], objUv.length / 2);
+						if (vi >= 0) face.push({ vi, ti });
 					}
 
 					for (let i = 1; i < face.length - 1; i++) {
-						indices.push(face[0], face[i], face[i + 1]);
+						const tri = [face[0], face[i], face[i + 1]];
+						for (const v of tri) {
+							const pBase = v.vi * 3;
+							triPos.push(objPos[pBase], objPos[pBase + 1], objPos[pBase + 2]);
+
+							if (v.ti >= 0) {
+								const tBase = v.ti * 2;
+								triUv.push(objUv[tBase], 1 - objUv[tBase + 1]);
+								hasAnyUv = true;
+							} else {
+								triUv.push(0, 0);
+							}
+						}
 					}
 				}
 			}
 
-			if (positions.length === 0 || indices.length === 0) {
-				return null;
-			}
+			if (triPos.length === 0) return null;
 
 			const g = new THREE.BufferGeometry();
-			g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-			g.setIndex(indices);
+			g.setAttribute('position', new THREE.Float32BufferAttribute(triPos, 3));
+			if (hasAnyUv) {
+				g.setAttribute('uv', new THREE.Float32BufferAttribute(triUv, 2));
+			}
 			g.computeVertexNormals();
 
 			g.computeBoundingBox();
@@ -613,34 +598,126 @@
 			return g;
 		}
 
-		async function loadBiome2TreeGeometry() {
+		function dirname(path) {
+			const i = path.lastIndexOf('/');
+			return i >= 0 ? path.slice(0, i + 1) : '';
+		}
+
+		function resolveRelativePath(basePath, relative) {
+			if (!relative) return '';
+			if (/^https?:\/\//i.test(relative) || relative.startsWith('/')) return relative;
+			return dirname(basePath) + relative;
+		}
+
+		async function loadTextureSafe(path) {
+			return new Promise((resolve) => {
+				new THREE.TextureLoader().load(
+					encodeURI(path),
+					(tex) => {
+						tex.colorSpace = THREE.SRGBColorSpace;
+						resolve(tex);
+					},
+					undefined,
+					() => resolve(null)
+				);
+			});
+		}
+
+		function parseMtlMapKd(mtlText) {
+			const lines = mtlText.split(/\r?\n/);
+			for (const raw of lines) {
+				const line = raw.trim();
+				if (!line || line.startsWith('#')) continue;
+				if (line.toLowerCase().startsWith('map_kd ')) {
+					return line.slice(7).trim();
+				}
+			}
+			return '';
+		}
+
+		async function loadObjAsset(objPath, fallback) {
 			try {
-				const res = await fetch('assets/biome2/tree/tree.obj');
-				if (!res.ok) return null;
-				const text = await res.text();
-				return parseObjGeometry(text);
+				const objRes = await fetch(encodeURI(objPath));
+				if (!objRes.ok) return null;
+				const objText = await objRes.text();
+				const geometry = parseObjGeometry(objText);
+				if (!geometry) return null;
+
+				let map = null;
+				const mtllibLine = objText.split(/\r?\n/).find((l) => l.trim().toLowerCase().startsWith('mtllib '));
+				if (mtllibLine) {
+					const mtlRef = mtllibLine.trim().slice(7).trim();
+					const mtlPath = resolveRelativePath(objPath, mtlRef);
+					try {
+						const mtlRes = await fetch(encodeURI(mtlPath));
+						if (mtlRes.ok) {
+							const mtlText = await mtlRes.text();
+							const kdRef = parseMtlMapKd(mtlText);
+							if (kdRef) {
+								const texPath = resolveRelativePath(mtlPath, kdRef);
+								map = await loadTextureSafe(texPath);
+							}
+						}
+					} catch (_) {
+						// Missing MTL should not break rendering.
+					}
+				}
+
+				const material = new THREE.MeshStandardMaterial({
+					color: fallback.color,
+					roughness: fallback.roughness,
+					metalness: fallback.metalness,
+					map: map || null
+				});
+				if (material.map) material.needsUpdate = true;
+
+				return { geometry, material };
 			} catch (error) {
-				console.warn('Biome 2 tree OBJ failed to load.', error);
+				console.warn('Vegetation OBJ failed to load:', objPath, error);
 				return null;
 			}
 		}
 
-		function buildBiome2Vegetation(group, terrain, noise, treeGeometry) {
-			if (!treeGeometry) return;
-
-			const count = 180;
-			const treeMat = new THREE.MeshStandardMaterial({
+		async function loadBiome2TreeAsset() {
+			return loadObjAsset('assets/biome2/tree/tree.obj', {
 				color: '#7f725f',
 				roughness: 0.88,
 				metalness: 0.02
 			});
-			const instanced = new THREE.InstancedMesh(treeGeometry, treeMat, count);
+		}
+
+		async function loadBiome2OregonAsset() {
+			return loadObjAsset('assets/biome2/Oregon plant 1 3/Oregon plant 1.obj', {
+				color: '#5f724f',
+				roughness: 0.92,
+				metalness: 0.0
+			});
+		}
+
+		async function loadBiome2SecondBushAsset() {
+			return loadObjAsset('assets/biome2/secondbush .obj', {
+				color: '#6e745f',
+				roughness: 0.9,
+				metalness: 0.01
+			});
+		}
+
+		function buildBiome2Vegetation(group, terrain, noise, asset, options = {}) {
+			if (!asset || !asset.geometry || !asset.material) return;
+
+			const count = options.count ?? 180;
+			const material = asset.material.clone();
+			const instanced = new THREE.InstancedMesh(asset.geometry, material, count);
 			instanced.castShadow = true;
 			instanced.receiveShadow = true;
 
 			const half = terrain.size * 0.5;
-			const ringMin = half * 0.36;
-			const ringMax = half * 0.96;
+			const ringMin = half * (options.ringMinRatio ?? 0.36);
+			const ringMax = half * (options.ringMaxRatio ?? 0.96);
+			const jitter = options.jitter ?? 12;
+			const scaleMin = options.scaleMin ?? 0.032;
+			const scaleMax = options.scaleMax ?? 0.072;
+			const avoidCenter = options.avoidCenter ?? 16;
 			const dummy = new THREE.Object3D();
 
 			for (let i = 0; i < count; i++) {
@@ -649,11 +726,12 @@
 				const r2 = frac(Math.sin((i + 1) * 49.631) * 16453.9152);
 				const a = r0 * Math.PI * 2;
 				const rad = lerp(ringMin, ringMax, Math.pow(r1, 0.72));
-				const x = Math.cos(a) * rad + (r2 - 0.5) * 12;
-				const z = Math.sin(a) * rad + (r0 - 0.5) * 12;
+				const x = Math.cos(a) * rad + (r2 - 0.5) * jitter;
+				const z = Math.sin(a) * rad + (r0 - 0.5) * jitter;
+				if (Math.abs(x) < avoidCenter && Math.abs(z) < avoidCenter) continue;
 				const y = heightAt(noise, x, z, terrain);
 
-				const s = lerp(0.032, 0.072, frac(Math.sin((i + 1) * 93.119) * 7723.551));
+				const s = lerp(scaleMin, scaleMax, frac(Math.sin((i + 1) * 93.119) * 7723.551));
 				dummy.position.set(x, y, z);
 				dummy.rotation.set(0, a + r1 * Math.PI, 0);
 				dummy.scale.setScalar(s);
@@ -748,9 +826,7 @@
 					sky.material.uniforms.useSkyTex.value = 1;
 				},
 				undefined,
-				() => {
-					statusEl.textContent = 'Sky texture failed to load. Keeping current sky colors.';
-				}
+				() => {}
 			);
 
 			return sky;
@@ -1372,7 +1448,9 @@
 			const config = loadInlineScene();
 			const biome2Reference = await loadBiome2ReferencePack();
 			const biome4Reference = await loadBiome4ReferencePack();
-			const biome2TreeGeometry = await loadBiome2TreeGeometry();
+			const biome2TreeAsset = await loadBiome2TreeAsset();
+			const biome2OregonAsset = await loadBiome2OregonAsset();
+			const biome2SecondBushAsset = await loadBiome2SecondBushAsset();
 			const baseTerrain = cloneObject({
 				ventBlend: config.terrain.ventBlend,
 				ventDepth: config.terrain.ventDepth,
@@ -1472,8 +1550,33 @@
 				terrainState = buildTerrain(scene, config);
 				ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
 
-				if (activeBiomeId === 'B02' && biome2TreeGeometry) {
-					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2TreeGeometry);
+				if (activeBiomeId === 'B02') {
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2TreeAsset, {
+						count: 160,
+						ringMinRatio: 0.42,
+						ringMaxRatio: 0.98,
+						scaleMin: 0.03,
+						scaleMax: 0.068,
+						avoidCenter: 20
+					});
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2OregonAsset, {
+						count: 320,
+						ringMinRatio: 0.22,
+						ringMaxRatio: 0.96,
+						jitter: 16,
+						scaleMin: 0.05,
+						scaleMax: 0.122,
+						avoidCenter: 10
+					});
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2SecondBushAsset, {
+						count: 220,
+						ringMinRatio: 0.3,
+						ringMaxRatio: 0.95,
+						jitter: 14,
+						scaleMin: 0.045,
+						scaleMax: 0.11,
+						avoidCenter: 12
+					});
 				}
 			}
 
@@ -1538,8 +1641,7 @@
 			const duration = config.timeline.durationSec;
 			let paused = false;
 			let tAccum = 0;
-			let recording = false;
-			let activeBiomeId = 'B01';
+			let activeBiomeId = 'B02';
 
 			function setStatus(text) {
 				statusEl.textContent = text;
@@ -1551,48 +1653,6 @@
 				setStatus(paused ? 'STOP' : activeBiomeId);
 			});
 
-			async function recordFlight() {
-				if (recording) return;
-				if (!('MediaRecorder' in window)) {
-					setStatus('NOREC');
-					return;
-				}
-
-				recording = true;
-				recordBtn.disabled = true;
-				setStatus('REC');
-
-				const stream = renderer.domElement.captureStream(60);
-				const chunks = [];
-				const recorder = new MediaRecorder(stream, {
-					mimeType: 'video/webm;codecs=vp9'
-				});
-
-				recorder.ondataavailable = (event) => {
-					if (event.data && event.data.size > 0) chunks.push(event.data);
-				};
-
-				recorder.onstop = () => {
-					const blob = new Blob(chunks, { type: 'video/webm' });
-					const url = URL.createObjectURL(blob);
-					const a = document.createElement('a');
-					const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-					a.href = url;
-					a.download = `wrapped-gift-flyover-${stamp}.webm`;
-					a.click();
-					URL.revokeObjectURL(url);
-					recording = false;
-					recordBtn.disabled = false;
-					setStatus(activeBiomeId);
-				};
-
-				recorder.start(100);
-				const ms = duration * 1000;
-				window.setTimeout(() => recorder.stop(), ms);
-			}
-
-			recordBtn.addEventListener('click', recordFlight);
-
 			biomeDock.addEventListener('click', (event) => {
 				const target = event.target.closest('.biome-btn');
 				if (!target) return;
@@ -1601,7 +1661,7 @@
 				applyBiome(clamp(biomeIndex, 0, BIOMES.length - 1));
 			});
 
-			applyBiome(1);
+			applyBiome(0);
 
 			function animate() {
 				requestAnimationFrame(animate);
