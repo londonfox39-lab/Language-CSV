@@ -178,6 +178,31 @@ th {
   padding: 0.8rem;
 }
 
+.photo-widget {
+  width: min(100%, 340px);
+  border: 1px dashed #bfa98a;
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.6rem;
+  margin: 0.2rem 0 0.95rem;
+}
+
+.photo-widget img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  display: block;
+  background: linear-gradient(135deg, #f0e6d7, #e5efe9);
+}
+
+.photo-widget-label {
+  margin: 0.5rem 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
 .footer {
   max-width: var(--max);
   margin: 0 auto;
