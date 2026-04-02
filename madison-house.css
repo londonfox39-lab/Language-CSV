@@ -120,8 +120,13 @@ main {
 
 .hero {
   padding: 2.2rem;
-  background: linear-gradient(135deg, rgba(61, 54, 50, 0.02), transparent 40%), var(--paper);
+  background: 
+    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139, 111, 66, 0.02) 2px, rgba(139, 111, 66, 0.02) 4px),
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139, 111, 66, 0.015) 3px, rgba(139, 111, 66, 0.015) 6px),
+    linear-gradient(135deg, rgba(61, 54, 50, 0.04), transparent 50%),
+    var(--paper);
   border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
 }
 
 h1,
@@ -211,28 +216,42 @@ th {
 }
 
 .photo-widget {
-  width: min(100%, 340px);
-  border: 1px dashed #bfa98a;
-  background: #fff;
-  border-radius: 14px;
-  padding: 0.6rem;
-  margin: 0.2rem 0 0.95rem;
+  aspect-ratio: 1;
+  border: 3px solid var(--accent);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 
+    0 0 0 1px var(--line),
+    0 12px 32px rgba(42, 36, 32, 0.12);
+  background: linear-gradient(135deg, #f5ede6, var(--paper));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.photo-widget::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 50%);
+  pointer-events: none;
 }
 
 .photo-widget img {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  height: 100%;
   object-fit: cover;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  display: block;
-  background: linear-gradient(135deg, #f0e6d7, #e5efe9);
+  position: relative;
+  z-index: 1;
 }
 
 .photo-widget-label {
-  margin: 0.5rem 0 0;
-  font-size: 0.84rem;
-  color: var(--muted);
+  margin: 0.8rem 0 0;
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-align: center;
 }
 
 .footer {
@@ -241,6 +260,75 @@ th {
   padding: 0 1rem 2rem;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line) 20%, var(--line) 80%, transparent);
+  margin: 2rem 0;
+}
+
+.service-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  background: linear-gradient(135deg, var(--accent-soft), #f9f3eb);
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  font-size: 1.3rem;
+  color: var(--accent);
+  margin-right: 0.8rem;
+  flex-shrink: 0;
+}
+
+.service-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  margin-bottom: 1.6rem;
+  padding: 1rem;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+}
+
+.service-item h3 {
+  margin: 0 0 0.4rem;
+  color: var(--accent);
+}
+
+.service-item p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.wellness-badge {
+  display: inline-block;
+  padding: 0.4rem 0.9rem;
+  background: var(--accent);
+  color: var(--paper);
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.visual-separator {
+  position: relative;
+  height: 3px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    var(--gold) 10%, 
+    var(--accent) 50%, 
+    var(--gold) 90%, 
+    transparent);
+  margin: 2.5rem 0;
+  border-radius: 2px;
 }
 
 @media (max-width: 860px) {
