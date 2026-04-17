@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Wrapped Gift Terrain Flyover</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			font-family: "Avenir Next", "Segoe UI", sans-serif;
+		}
+
+		html,
+		body {
+			margin: 0;
+			height: 100%;
+			overflow: hidden;
+			background: #0f0f12;
+		}
+
+		#app {
+			position: fixed;
+			inset: 0;
+		}
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 100%;
+		}
+
+		.hud {
+			position: fixed;
+			left: 16px;
+			top: 16px;
+			z-index: 10;
+			display: flex;
+			gap: 10px;
+			align-items: center;
+			background: rgba(11, 12, 14, 0.34);
+			border: 1px solid rgba(255, 255, 255, 0.18);
+			border-radius: 999px;
+			backdrop-filter: blur(10px);
+			padding: 8px 10px;
+			color: #f2f5ff;
+			box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
+		}
+
+		.controls {
+			display: flex;
+			gap: 8px;
+		}
+
+		.biome-dock {
+			position: fixed;
+			left: 50%;
+			bottom: 18px;
+			transform: translateX(-50%);
+			z-index: 10;
+			display: flex;
+			gap: 10px;
+			padding: 12px;
+			border-radius: 999px;
+			background: rgba(15, 16, 19, 0.4);
+			border: 1px solid rgba(255, 255, 255, 0.2);
+			backdrop-filter: blur(10px);
+			box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+		}
+
+		.biome-btn {
+			width: 56px;
+			height: 56px;
+			border-radius: 50%;
+			border: 1px solid rgba(255, 255, 255, 0.36);
+			background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.02) 70%);
+			color: rgba(255, 255, 255, 0.9);
+			font-size: 12px;
+			letter-spacing: 1.2px;
+			font-weight: 700;
+			padding: 0;
+			cursor: pointer;
+			transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+		}
+
+		button {
+			border: 1px solid rgba(255, 255, 255, 0.32);
+			color: #fff;
+			background: rgba(255, 255, 255, 0.07);
+			border-radius: 9px;
+			padding: 8px 12px;
+			font-size: 12px;
+			font-weight: 560;
+			cursor: pointer;
+			transition: background 0.2s ease, transform 0.2s ease;
+		}
+
+		button:hover {
+			background: rgba(255, 255, 255, 0.15);
+			transform: translateY(-1px);
+		}
+
+		.biome-btn:hover {
+			transform: translateY(-2px) scale(1.04);
+			box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26);
+		}
+
+		.biome-btn.active {
+			border-color: rgba(255, 245, 212, 0.9);
+			box-shadow: 0 0 0 2px rgba(255, 229, 176, 0.2), 0 8px 24px rgba(0, 0, 0, 0.36);
+		}
+
+		.micro {
+			border-radius: 999px;
+			padding: 7px 11px;
+			font-size: 11px;
+			letter-spacing: 0.6px;
+			background: rgba(255, 255, 255, 0.08);
+		}
+
+		button:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.status {
+			font-size: 11px;
+			opacity: 0.9;
+			padding: 4px 8px;
+			border-radius: 999px;
+			background: rgba(255, 255, 255, 0.08);
+			min-width: 66px;
+			text-align: center;
+		}
+
+		@media (max-width: 720px) {
+			.biome-btn {
+				width: 50px;
+				height: 50px;
+				font-size: 11px;
+			}
+
+			.biome-dock {
+				gap: 8px;
+				padding: 10px;
+				bottom: 12px;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div id="app"></div>
+	<div class="hud">
+		<div class="controls">
+			<button id="toggleFlight" class="micro">PAUSE</button>
+		</div>
+		<div class="status" id="status">B02</div>
+	</div>
+	<div class="biome-dock" id="biomeDock" aria-label="Biome navigation">
+		<button class="biome-btn active" data-biome="0" aria-label="Rhino biome">B02</button>
+		<button class="biome-btn" data-biome="1" aria-label="Ember biome">B04</button>
+	</div>
+
+	<script type="application/json" id="scene-config">
+		{
+			"title": "Wrapped Gift Flyover",
+			"render": {
+				"pixelRatioCap": 2,
+				"antialias": true,
+				"clearColor": "#61685f"
+			},
+			"timeline": {
+				"durationSec": 16,
+				"loop": true,
+				"speed": 1
+			},
+			"atmosphere": {
+				"fogColor": "#8a9387",
+				"fogNear": 40,
+				"fogFar": 300,
+				"skyTexture": "assets/sky-reference.jpg",
+				"skyTextureRepeatX": 1,
+				"skyTextureRepeatY": 1,
+				"skyTextureRotationDeg": 0,
+				"skyTop": "#5f675f",
+				"skyHorizon": "#aab3a7"
+			},
+			"terrain": {
+				"size": 260,
+				"segments": 240,
+				"heightAmplitude": 28,
+				"noiseScale": 0.017,
+				"warp": 2.1,
+				"textureScale": 2.1,
+				"plaidBlend": 0.12,
+				"tessellationScale": 8.2,
+				"tessellationEdge": 0.11,
+				"tessellationStrength": 1.08,
+				"glyphScale": 5.1,
+				"glyphCarveStrength": 0.82,
+				"ribbonWidth": 0.16,
+				"ribbonSoftness": 0.08,
+				"panelFrequency": 0.72,
+				"ventBlend": 0.9,
+				"ventDepth": 1.22,
+				"ventEdgeLift": 0.34,
+				"vents": [
+					{ "position": [-42, 0, 22], "size": [24, 14], "rotationDeg": 14, "frame": 1.65, "slatSpacing": 1.18, "slatWidth": 0.5, "screwRadius": 0.38 },
+					{ "position": [-8, 0, -4], "size": [20, 12], "rotationDeg": -9, "frame": 1.35, "slatSpacing": 1.05, "slatWidth": 0.46, "screwRadius": 0.34 },
+					{ "position": [30, 0, 26], "size": [28, 15], "rotationDeg": 6, "frame": 1.8, "slatSpacing": 1.26, "slatWidth": 0.54, "screwRadius": 0.4 },
+					{ "position": [24, 0, -30], "size": [18, 11], "rotationDeg": -22, "frame": 1.25, "slatSpacing": 1.0, "slatWidth": 0.42, "screwRadius": 0.32 }
+				],
+				"colors": {
+					"baseA": "#b39a80",
+					"baseB": "#7f654e",
+					"plaidA": "#5f4736",
+					"plaidB": "#7e6249",
+					"plaidC": "#c3ad94",
+					"camoA": "#3e3128",
+					"camoB": "#6a5442",
+					"camoC": "#9a8368"
+					,
+					"wrapRed": "#6f5846",
+					"wrapGreen": "#8e745b",
+					"ribbon": "#4d3c30",
+					"paperLight": "#ccb7a0",
+					"paperShadow": "#5d4a3b"
+				}
+			},
+			"camera": {
+				"fov": 45,
+				"near": 0.1,
+				"far": 900,
+				"path": [
+					{ "t": 0.0, "pos": [-85, 27, 72], "look": [10, 2, 6], "bank": -0.06 },
+					{ "t": 0.17, "pos": [-36, 20, 45], "look": [20, 4, 2], "bank": 0.03 },
+					{ "t": 0.33, "pos": [10, 23, 18], "look": [34, 3, -8], "bank": 0.05 },
+					{ "t": 0.5, "pos": [60, 29, 5], "look": [24, 5, -24], "bank": -0.02 },
+					{ "t": 0.68, "pos": [38, 19, -38], "look": [0, 6, -22], "bank": -0.08 },
+					{ "t": 0.83, "pos": [-24, 22, -32], "look": [-28, 4, -8], "bank": 0.03 },
+					{ "t": 1.0, "pos": [-85, 27, 72], "look": [10, 2, 6], "bank": -0.06 }
+				]
+			},
+			"forms": {
+				"ringClusters": [
+					{ "position": [-32, 1.3, 14], "radius": 5.8, "count": 4, "spread": 5 },
+					{ "position": [35, 1.3, 12], "radius": 5.3, "count": 4, "spread": 4.5 }
+				],
+				"boneArcs": {
+					"position": [8, 1.3, -58],
+					"count": 7,
+					"arcRadius": 22,
+					"height": 14
+				},
+				"crystalBird": {
+					"position": [0, 3.8, 52],
+					"scale": 1.25
+				}
+			}
+		}
+	</script>
+
+	<script type="module">
+		import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+
+		const app = document.getElementById('app');
+		const statusEl = document.getElementById('status');
+		const toggleFlightBtn = document.getElementById('toggleFlight');
+		const biomeDock = document.getElementById('biomeDock');
+		const biomeButtons = Array.from(document.querySelectorAll('.biome-btn'));
+
+		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+		const frac = (v) => v - Math.floor(v);
+		const lerp = (a, b, t) => a + (b - a) * t;
+		const smooth = (t) => t * t * (3 - 2 * t);
+		const smoothstep = (a, b, x) => {
+			const t = clamp((x - a) / Math.max(1e-6, b - a), 0, 1);
+			return t * t * (3 - 2 * t);
+		};
+
+		const BIOMES = [
+			{
+				id: 'B02',
+				atmosphere: { clearColor: '#5f655f', fogColor: '#81847f', fogNear: 30, fogFar: 242, skyTop: '#676f69', skyHorizon: '#9ca298', skyTexture: 'assets/biome2/sky-reference.png' },
+				terrain: {
+					ventBlend: 1.15,
+					ventDepth: 1.52,
+					ventEdgeLift: 0.55,
+					colors: {
+						baseA: '#9c998f', baseB: '#5e5a54', plaidA: '#4f4d49', plaidB: '#6a6660', plaidC: '#b8b3a9',
+						camoA: '#3f3b38', camoB: '#66615a', camoC: '#8d887f', wrapRed: '#8f7867', wrapGreen: '#8d8f81',
+						ribbon: '#4b4742', paperLight: '#d9d2c3', paperShadow: '#4e4a46'
+					}
+				},
+				lights: {
+					hemiSky: '#d9ddd2', hemiGround: '#35312e', hemiIntensity: 0.58,
+					sunColor: '#ffe5c4', sunIntensity: 1.84,
+					fillColor: '#a3acb0', fillIntensity: 0.48,
+					rakeColor: '#efe7d7', rakeIntensity: 0.58
+				}
+			},
+			{
+				id: 'B04',
+				atmosphere: { clearColor: '#6f4f46', fogColor: '#926b5b', fogNear: 32, fogFar: 228, skyTop: '#7b5a4e', skyHorizon: '#c19984' },
+				terrain: {
+					ventBlend: 1.16,
+					ventDepth: 1.62,
+					ventEdgeLift: 0.6,
+					colors: {
+						baseA: '#ba8e73', baseB: '#6d4636', plaidA: '#6b3f31', plaidB: '#8d5b46', plaidC: '#d4a586',
+						camoA: '#4a2a21', camoB: '#784636', camoC: '#a86d56', wrapRed: '#9a4b3b', wrapGreen: '#c2795d',
+						ribbon: '#5a2d24', paperLight: '#e7c9b2', paperShadow: '#683d30'
+					}
+				},
+				lights: {
+					hemiSky: '#ffd8bd', hemiGround: '#3f241d', hemiIntensity: 0.6,
+					sunColor: '#ffd0ab', sunIntensity: 2.06,
+					fillColor: '#cf9a7b', fillIntensity: 0.42,
+					rakeColor: '#ffd9c8', rakeIntensity: 0.56
+				}
+			}
+		];
+
+		class ValueNoise {
+			constructor(seed = 12917) {
+				this.seed = seed >>> 0;
+			}
+
+			hash(x, y) {
+				let h = x * 374761393 + y * 668265263 + this.seed * 700001;
+				h = (h ^ (h >> 13)) * 1274126177;
+				return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+			}
+
+			noise2(x, y) {
+				const xi = Math.floor(x);
+				const yi = Math.floor(y);
+				const tx = x - xi;
+				const ty = y - yi;
+				const u = smooth(tx);
+				const v = smooth(ty);
+
+				const a = this.hash(xi, yi);
+				const b = this.hash(xi + 1, yi);
+				const c = this.hash(xi, yi + 1);
+				const d = this.hash(xi + 1, yi + 1);
+
+				const ab = lerp(a, b, u);
+				const cd = lerp(c, d, u);
+				return lerp(ab, cd, v) * 2 - 1;
+			}
+
+			fbm(x, y, octaves = 5) {
+				let value = 0;
+				let amp = 0.52;
+				let freq = 1;
+				let norm = 0;
+				for (let i = 0; i < octaves; i++) {
+					value += amp * this.noise2(x * freq, y * freq);
+					norm += amp;
+					amp *= 0.5;
+					freq *= 2.02;
+				}
+				return value / Math.max(norm, 0.0001);
+			}
+		}
+
+		const loadInlineScene = () => {
+			try {
+				const node = document.getElementById('scene-config');
+				if (!node) {
+					throw new Error('Missing scene-config script block');
+				}
+				return JSON.parse(node.textContent);
+			} catch (error) {
+				statusEl.textContent = 'Invalid embedded JSON scene config in WrapGift.html.';
+				throw error;
+			}
+		};
+
+		function loadImageToCanvasTexture(path) {
+			const loader = new THREE.TextureLoader();
+			return new Promise((resolve, reject) => {
+				loader.load(
+					path,
+					(tex) => {
+						tex.colorSpace = THREE.SRGBColorSpace;
+						resolve(tex);
+					},
+					undefined,
+					(error) => reject(error)
+				);
+			});
+		}
+
+		function textureToCanvas(texture, size = 1024) {
+			const source = texture.image;
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(source, 0, 0, size, size);
+			return canvas;
+		}
+
+		function buildReferenceTexturePack(canvases, size = 1024) {
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+			ctx.clearRect(0, 0, size, size);
+
+			canvases.forEach((imgCanvas, index) => {
+				ctx.save();
+				ctx.globalAlpha = index === 0 ? 0.92 : 0.56;
+				ctx.filter = index === 0
+					? 'contrast(1.2) saturate(0.88) brightness(0.94)'
+					: 'contrast(1.3) saturate(0.7) brightness(0.92)';
+				ctx.drawImage(imgCanvas, 0, 0, size, size);
+				ctx.restore();
+			});
+
+			ctx.save();
+			ctx.globalAlpha = 0.18;
+			ctx.filter = 'blur(0.7px) contrast(1.15)';
+			ctx.drawImage(canvas, 0, 0, size, size);
+			ctx.restore();
+
+			const img = ctx.getImageData(0, 0, size, size);
+			const data = img.data;
+			const height = new Float32Array(size * size);
+
+			for (let i = 0; i < height.length; i++) {
+				const p = i * 4;
+				const r = data[p] / 255;
+				const g = data[p + 1] / 255;
+				const b = data[p + 2] / 255;
+				const lum = r * 0.299 + g * 0.587 + b * 0.114;
+				const high = Math.max(r, Math.max(g, b)) - Math.min(r, Math.min(g, b));
+				height[i] = clamp(Math.pow(lum, 1.25) * 0.8 + high * 0.35, 0, 1);
+			}
+
+			const texture = new THREE.CanvasTexture(canvas);
+			texture.colorSpace = THREE.SRGBColorSpace;
+			texture.wrapS = THREE.RepeatWrapping;
+			texture.wrapT = THREE.RepeatWrapping;
+			texture.anisotropy = 8;
+			texture.needsUpdate = true;
+
+			return {
+				texture,
+				height,
+				size
+			};
+		}
+
+		async function loadBiome2ReferencePack() {
+			const candidates = [
+				'assets/biome2/viewcapture-1.jpg',
+				'assets/biome2/viewcapture-2.jpg',
+				'assets/biome2/viewcapture-3.jpg',
+				'assets/biome2/viewcapture-1.png',
+				'assets/biome2/viewcapture-2.png',
+				'assets/biome2/viewcapture-3.png',
+				'csv/utah-monolith.jpg',
+				'assets/bush3/textures/2a2878016deee2662dd77b14c376d42d.jpg'
+			];
+
+			const loaded = [];
+			for (const path of candidates) {
+				try {
+					const tex = await loadImageToCanvasTexture(path);
+					loaded.push(textureToCanvas(tex, 1024));
+					tex.dispose();
+				} catch (_) {
+					// Ignore missing files; this allows drop-in reference updates later.
+				}
+			}
+
+			if (loaded.length === 0) {
+				return null;
+			}
+
+			return buildReferenceTexturePack(loaded.slice(0, 3), 1024);
+		}
+
+		async function loadBiome4ReferencePack() {
+			const candidates = [
+				'assets/biome4/viewcapture-1.jpg',
+				'assets/biome4/viewcapture-2.jpg',
+				'assets/biome4/viewcapture-3.jpg',
+				'assets/biome4/viewcapture-1.png',
+				'assets/biome4/viewcapture-2.png',
+				'assets/biome4/viewcapture-3.png',
+				'assets/biome4/utah-monolith.jpg',
+				'assets/biome4/utah-monolith.png'
+			];
+
+			const loaded = [];
+			for (const path of candidates) {
+				try {
+					const tex = await loadImageToCanvasTexture(path);
+					loaded.push(textureToCanvas(tex, 1024));
+					tex.dispose();
+				} catch (_) {
+					// Ignore missing files; this allows drop-in reference updates later.
+				}
+			}
+
+			if (loaded.length === 0) {
+				return null;
+			}
+
+			return buildReferenceTexturePack(loaded.slice(0, 3), 1024);
+		}
+
+		function parseObjGeometry(text) {
+			const objPos = [];
+			const objUv = [];
+			const triPos = [];
+			const triUv = [];
+			let hasAnyUv = false;
+
+			const resolveIndex = (value, count) => {
+				if (!value) return -1;
+				const n = parseInt(value, 10);
+				if (!Number.isFinite(n) || n === 0) return -1;
+				return n > 0 ? n - 1 : count + n;
+			};
+
+			const lines = text.split(/\r?\n/);
+			for (const raw of lines) {
+				const line = raw.trim();
+				if (!line || line.startsWith('#')) continue;
+
+				if (line.startsWith('v ')) {
+					const p = line.split(/\s+/);
+					if (p.length >= 4) {
+						objPos.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+					}
+					continue;
+				}
+
+				if (line.startsWith('vt ')) {
+					const p = line.split(/\s+/);
+					if (p.length >= 3) {
+						objUv.push(parseFloat(p[1]), parseFloat(p[2]));
+					}
+					continue;
+				}
+
+				if (line.startsWith('f ')) {
+					const tokens = line.split(/\s+/).slice(1);
+					if (tokens.length < 3) continue;
+
+					const face = [];
+					for (const token of tokens) {
+						const parts = token.split('/');
+						const vi = resolveIndex(parts[0], objPos.length / 3);
+						const ti = resolveIndex(parts[1], objUv.length / 2);
+						if (vi >= 0) face.push({ vi, ti });
+					}
+
+					for (let i = 1; i < face.length - 1; i++) {
+						const tri = [face[0], face[i], face[i + 1]];
+						for (const v of tri) {
+							const pBase = v.vi * 3;
+							triPos.push(objPos[pBase], objPos[pBase + 1], objPos[pBase + 2]);
+
+							if (v.ti >= 0) {
+								const tBase = v.ti * 2;
+								triUv.push(objUv[tBase], 1 - objUv[tBase + 1]);
+								hasAnyUv = true;
+							} else {
+								triUv.push(0, 0);
+							}
+						}
+					}
+				}
+			}
+
+			if (triPos.length === 0) return null;
+
+			const g = new THREE.BufferGeometry();
+			g.setAttribute('position', new THREE.Float32BufferAttribute(triPos, 3));
+			if (hasAnyUv) {
+				g.setAttribute('uv', new THREE.Float32BufferAttribute(triUv, 2));
+			}
+			g.computeVertexNormals();
+
+			g.computeBoundingBox();
+			const box = g.boundingBox;
+			const cx = (box.min.x + box.max.x) * 0.5;
+			const cz = (box.min.z + box.max.z) * 0.5;
+			g.translate(-cx, -box.min.y, -cz);
+			g.computeBoundingSphere();
+
+			return g;
+		}
+
+		function dirname(path) {
+			const i = path.lastIndexOf('/');
+			return i >= 0 ? path.slice(0, i + 1) : '';
+		}
+
+		function resolveRelativePath(basePath, relative) {
+			if (!relative) return '';
+			if (/^https?:\/\//i.test(relative) || relative.startsWith('/')) return relative;
+			return dirname(basePath) + relative;
+		}
+
+		async function loadTextureSafe(path) {
+			return new Promise((resolve) => {
+				new THREE.TextureLoader().load(
+					encodeURI(path),
+					(tex) => {
+						tex.colorSpace = THREE.SRGBColorSpace;
+						resolve(tex);
+					},
+					undefined,
+					() => resolve(null)
+				);
+			});
+		}
+
+		function parseMtlMapKd(mtlText) {
+			const lines = mtlText.split(/\r?\n/);
+			for (const raw of lines) {
+				const line = raw.trim();
+				if (!line || line.startsWith('#')) continue;
+				if (line.toLowerCase().startsWith('map_kd ')) {
+					return line.slice(7).trim();
+				}
+			}
+			return '';
+		}
+
+		async function loadObjAsset(objPath, fallback) {
+			try {
+				const objRes = await fetch(encodeURI(objPath));
+				if (!objRes.ok) return null;
+				const objText = await objRes.text();
+				const geometry = parseObjGeometry(objText);
+				if (!geometry) return null;
+
+				let map = null;
+				const mtllibLine = objText.split(/\r?\n/).find((l) => l.trim().toLowerCase().startsWith('mtllib '));
+				if (mtllibLine) {
+					const mtlRef = mtllibLine.trim().slice(7).trim();
+					const mtlPath = resolveRelativePath(objPath, mtlRef);
+					try {
+						const mtlRes = await fetch(encodeURI(mtlPath));
+						if (mtlRes.ok) {
+							const mtlText = await mtlRes.text();
+							const kdRef = parseMtlMapKd(mtlText);
+							if (kdRef) {
+								const texPath = resolveRelativePath(mtlPath, kdRef);
+								map = await loadTextureSafe(texPath);
+							}
+						}
+					} catch (_) {
+						// Missing MTL should not break rendering.
+					}
+				}
+
+				const material = new THREE.MeshStandardMaterial({
+					color: fallback.color,
+					roughness: fallback.roughness,
+					metalness: fallback.metalness,
+					map: map || null
+				});
+				if (material.map) material.needsUpdate = true;
+
+				return { geometry, material };
+			} catch (error) {
+				console.warn('Vegetation OBJ failed to load:', objPath, error);
+				return null;
+			}
+		}
+
+		async function loadBiome2TreeAsset() {
+			return loadObjAsset('assets/biome2/tree/tree.obj', {
+				color: '#7f725f',
+				roughness: 0.88,
+				metalness: 0.02
+			});
+		}
+
+		async function loadBiome2OregonAsset() {
+			return loadObjAsset('assets/biome2/Oregon plant 1 3/Oregon plant 1.obj', {
+				color: '#5f724f',
+				roughness: 0.92,
+				metalness: 0.0
+			});
+		}
+
+		async function loadBiome2SecondBushAsset() {
+			return loadObjAsset('assets/biome2/secondbush .obj', {
+				color: '#6e745f',
+				roughness: 0.9,
+				metalness: 0.01
+			});
+		}
+
+		async function loadBiome4MeshAsset() {
+			return loadObjAsset('assets/biome4/red green /1_11_2026.obj', {
+				color: '#8f7d68',
+				roughness: 0.86,
+				metalness: 0.02
+			});
+		}
+
+		function buildBiome2Vegetation(group, terrain, noise, asset, options = {}) {
+			if (!asset || !asset.geometry || !asset.material) return;
+
+			const count = options.count ?? 180;
+			const material = asset.material.clone();
+			if (options.materialColor) material.color.set(options.materialColor);
+			material.color.multiplyScalar(options.colorGain ?? 1.0);
+			if (options.emissive) material.emissive.set(options.emissive);
+			if (options.emissiveIntensity !== undefined) material.emissiveIntensity = options.emissiveIntensity;
+			if (options.roughness !== undefined) material.roughness = options.roughness;
+			if (options.metalness !== undefined) material.metalness = options.metalness;
+			material.needsUpdate = true;
+			const instanced = new THREE.InstancedMesh(asset.geometry, material, count);
+			instanced.castShadow = true;
+			instanced.receiveShadow = true;
+
+			const half = terrain.size * 0.5;
+			const ringMin = half * (options.ringMinRatio ?? 0.36);
+			const ringMax = half * (options.ringMaxRatio ?? 0.96);
+			const jitter = options.jitter ?? 12;
+			const scaleMin = options.scaleMin ?? 0.032;
+			const scaleMax = options.scaleMax ?? 0.072;
+			const avoidCenter = options.avoidCenter ?? 16;
+			const embedRatio = options.embedRatio ?? 0.0;
+			const embedDepthMin = options.embedDepthMin ?? 0.0;
+			const embedDepthMax = options.embedDepthMax ?? 0.0;
+			const emergeLift = options.emergeLift ?? 0.0;
+			const dummy = new THREE.Object3D();
+
+			for (let i = 0; i < count; i++) {
+				const r0 = frac(Math.sin((i + 1) * 78.233) * 43758.5453123);
+				const r1 = frac(Math.sin((i + 1) * 17.147) * 9653.1427);
+				const r2 = frac(Math.sin((i + 1) * 49.631) * 16453.9152);
+				const a = r0 * Math.PI * 2;
+				const rad = lerp(ringMin, ringMax, Math.pow(r1, 0.72));
+				const x = Math.cos(a) * rad + (r2 - 0.5) * jitter;
+				const z = Math.sin(a) * rad + (r0 - 0.5) * jitter;
+				if (Math.abs(x) < avoidCenter && Math.abs(z) < avoidCenter) continue;
+				let y = heightAt(noise, x, z, terrain);
+
+				const s = lerp(scaleMin, scaleMax, frac(Math.sin((i + 1) * 93.119) * 7723.551));
+				const buried = frac(Math.sin((i + 1) * 131.771) * 19417.337) < embedRatio;
+				if (buried) {
+					const depthT = frac(Math.sin((i + 1) * 57.713) * 9817.115);
+					const buryDepth = lerp(embedDepthMin, embedDepthMax, depthT) * s;
+					y -= buryDepth;
+				} else {
+					y += emergeLift * s;
+				}
+
+				dummy.position.set(x, y, z);
+				dummy.rotation.set(0, a + r1 * Math.PI, 0);
+				dummy.scale.setScalar(s);
+				dummy.updateMatrix();
+				instanced.setMatrixAt(i, dummy.matrix);
+			}
+
+			instanced.instanceMatrix.needsUpdate = true;
+			group.add(instanced);
+		}
+
+		function createSky(sceneConfig) {
+			const top = new THREE.Color(sceneConfig.atmosphere.skyTop);
+			const horizon = new THREE.Color(sceneConfig.atmosphere.skyHorizon);
+			const geo = new THREE.SphereGeometry(800, 40, 24);
+			const mat = new THREE.ShaderMaterial({
+				side: THREE.BackSide,
+				uniforms: {
+					topColor: { value: top },
+					horizonColor: { value: horizon },
+					skyTex: { value: null },
+					useSkyTex: { value: 0 },
+					ventImprintStrength: { value: 0 },
+					ventImprintColor: { value: new THREE.Color('#ece2cf') },
+					skyTime: { value: 0 }
+				},
+				vertexShader: `
+					varying vec3 vWorldPos;
+					void main() {
+						vec4 worldPos = modelMatrix * vec4(position, 1.0);
+						vWorldPos = worldPos.xyz;
+						gl_Position = projectionMatrix * viewMatrix * worldPos;
+					}
+				`,
+				fragmentShader: `
+					varying vec3 vWorldPos;
+					uniform vec3 topColor;
+					uniform vec3 horizonColor;
+					uniform sampler2D skyTex;
+					uniform float useSkyTex;
+					uniform float ventImprintStrength;
+					uniform vec3 ventImprintColor;
+					uniform float skyTime;
+					void main() {
+						vec3 dir = normalize(vWorldPos);
+						float h = dir.y * 0.5 + 0.5;
+						vec3 col = mix(horizonColor, topColor, smoothstep(0.18, 1.0, h));
+
+						vec2 skyUv = vec2(atan(dir.z, dir.x) / (6.28318530718) + 0.5, asin(clamp(dir.y, -1.0, 1.0)) / 3.14159265359 + 0.5);
+						if (useSkyTex > 0.5) {
+							vec3 texCol = texture2D(skyTex, skyUv).rgb;
+							col = texCol;
+						}
+
+						vec2 p = skyUv - 0.5;
+						p.y *= 1.35;
+						float radius = length(p);
+						float ringOuter = 1.0 - smoothstep(0.40, 0.46, radius);
+						float ringInner = 1.0 - smoothstep(0.28, 0.34, radius);
+						float ring = clamp(ringOuter - ringInner, 0.0, 1.0);
+
+						float fanAngle = atan(p.y, p.x) + skyTime * 0.08;
+						float blade = pow(max(0.0, cos(fanAngle * 8.0 + radius * 19.0)), 3.4) * (1.0 - smoothstep(0.08, 0.34, radius));
+
+						float leftRail = 1.0 - smoothstep(0.008, 0.022, abs(p.x + 0.34));
+						float rightRail = 1.0 - smoothstep(0.008, 0.022, abs(p.x - 0.34));
+						float rails = max(leftRail, rightRail) * (1.0 - smoothstep(0.38, 0.53, abs(p.y)));
+
+						float ventShape = clamp(ring * 0.85 + blade * 0.95 + rails * 0.42, 0.0, 1.0) * ventImprintStrength;
+						col = mix(col, ventImprintColor, ventShape * 0.48);
+						col *= 1.0 - ventShape * 0.11;
+
+						gl_FragColor = vec4(col, 1.0);
+					}
+				`
+			});
+			const sky = new THREE.Mesh(geo, mat);
+
+			const texturePath = (sceneConfig.atmosphere.skyTexture || '').trim();
+			if (!texturePath) {
+				return sky;
+			}
+
+			const loader = new THREE.TextureLoader();
+			loader.load(
+				texturePath,
+				(tex) => {
+					tex.colorSpace = THREE.SRGBColorSpace;
+					tex.wrapS = THREE.ClampToEdgeWrapping;
+					tex.wrapT = THREE.ClampToEdgeWrapping;
+					sky.material.uniforms.skyTex.value = tex;
+					sky.material.uniforms.useSkyTex.value = 1;
+				},
+				undefined,
+				() => {}
+			);
+
+			return sky;
+		}
+
+		function colorToObj(hex) {
+			const c = new THREE.Color(hex);
+			return { r: c.r, g: c.g, b: c.b };
+		}
+
+		function mixObjColor(a, b, t) {
+			return {
+				r: lerp(a.r, b.r, t),
+				g: lerp(a.g, b.g, t),
+				b: lerp(a.b, b.b, t)
+			};
+		}
+
+		function cloneObject(obj) {
+			return JSON.parse(JSON.stringify(obj));
+		}
+
+		function rotate2D(x, y, radians) {
+			const c = Math.cos(radians);
+			const s = Math.sin(radians);
+			return {
+				x: x * c - y * s,
+				y: x * s + y * c
+			};
+		}
+
+		function ventCoverInfluence(noise, x, z, terrain) {
+			const vents = Array.isArray(terrain.vents) ? terrain.vents : [];
+			if (vents.length === 0) {
+				return { carve: 0, ridge: 0, screws: 0, slats: 0, mask: 0 };
+			}
+
+			let carve = 0;
+			let ridge = 0;
+			let screws = 0;
+			let slats = 0;
+			let mask = 0;
+
+			for (const vent of vents) {
+				const cx = vent.position?.[0] || 0;
+				const cz = vent.position?.[2] || 0;
+				const width = Math.max(1, vent.size?.[0] || 20);
+				const depth = Math.max(1, vent.size?.[1] || 12);
+				const frame = Math.max(0.2, vent.frame || 1.2);
+				const slatSpacing = Math.max(0.4, vent.slatSpacing || 1.1);
+				const slatWidth = Math.max(0.2, Math.min(slatSpacing * 0.9, vent.slatWidth || slatSpacing * 0.48));
+				const screwRadius = Math.max(0.1, vent.screwRadius || 0.32);
+				const rot = ((vent.rotationDeg || 0) * Math.PI) / 180;
+
+				const local = rotate2D(x - cx, z - cz, -rot);
+				const halfW = width * 0.5;
+				const halfD = depth * 0.5;
+				const maxNorm = Math.max(Math.abs(local.x) / halfW, Math.abs(local.y) / halfD);
+				const outerMask = 1 - smoothstep(1.0, 1.06, maxNorm);
+				if (outerMask <= 0.0001) continue;
+
+				const innerHalfW = Math.max(0.1, halfW - frame);
+				const innerHalfD = Math.max(0.1, halfD - frame);
+				const innerNorm = Math.max(Math.abs(local.x) / innerHalfW, Math.abs(local.y) / innerHalfD);
+				const innerMask = 1 - smoothstep(1.0, 1.045, innerNorm);
+				const frameMask = clamp(outerMask - innerMask, 0, 1);
+
+				const slatCoord = (local.x / slatSpacing) + noise.fbm(local.x * 0.08 + cx, local.y * 0.08 + cz, 2) * 0.12;
+				const stripe = Math.abs(frac(slatCoord) - 0.5) * 2;
+				const slatSoft = Math.max(0.025, 1 - slatWidth / slatSpacing);
+				const slatBar = 1 - smoothstep(1 - slatSoft, 1, stripe);
+				const ventVoid = innerMask * (1 - slatBar);
+				const slatMask = innerMask * slatBar;
+
+				const sx = innerHalfW * 0.78;
+				const sz = innerHalfD * 0.78;
+				const screwDepth = 0.26;
+				let screwMask = 0;
+				const corners = [
+					[-sx, -sz], [sx, -sz], [sx, sz], [-sx, sz]
+				];
+				for (const c of corners) {
+					const d = Math.hypot(local.x - c[0], local.y - c[1]);
+					screwMask = Math.max(screwMask, 1 - smoothstep(screwRadius, screwRadius + screwDepth, d));
+				}
+
+				const ventMask = Math.max(frameMask, innerMask);
+				mask = Math.max(mask, ventMask);
+				ridge = Math.max(ridge, frameMask * 0.95 + slatMask * 0.16);
+				carve = Math.max(carve, ventVoid * 0.92 + screwMask * 0.35);
+				screws = Math.max(screws, screwMask);
+				slats = Math.max(slats, slatMask);
+			}
+
+			return { carve, ridge, screws, slats, mask };
+		}
+
+		function cellPoint(noise, gx, gy) {
+			return {
+				x: gx + noise.hash(gx + 17, gy + 29),
+				y: gy + noise.hash(gx + 53, gy + 71)
+			};
+		}
+
+		function floorInfluence(noise, u, v, terrain) {
+			const scale = terrain.tessellationScale || 10;
+			const px = u * scale;
+			const py = v * scale;
+			const gx = Math.floor(px);
+			const gy = Math.floor(py);
+
+			let d1 = 1e9;
+			let d2 = 1e9;
+
+			for (let oy = -1; oy <= 1; oy++) {
+				for (let ox = -1; ox <= 1; ox++) {
+					const pt = cellPoint(noise, gx + ox, gy + oy);
+					const dx = pt.x - px;
+					const dy = pt.y - py;
+					const dist = Math.hypot(dx, dy);
+					if (dist < d1) {
+						d2 = d1;
+						d1 = dist;
+					} else if (dist < d2) {
+						d2 = dist;
+					}
+				}
+			}
+
+			const edgeDelta = d2 - d1;
+			const cellEdge = 1 - smoothstep(0, terrain.tessellationEdge || 0.12, edgeDelta);
+			const warpedU = u + noise.fbm(u * 3.4, v * 3.6, 4) * 0.09;
+			const warpedV = v + noise.fbm(v * 3.5, u * 3.2, 4) * 0.09;
+			const ribbonWidth = terrain.ribbonWidth || 0.1;
+			const ribbonSoftness = terrain.ribbonSoftness || 0.05;
+			const flowA = Math.abs(Math.sin((warpedU * 8.8 + noise.fbm(warpedU * 8.2, warpedV * 8.2, 3) * 0.9) * Math.PI));
+			const flowB = Math.abs(Math.sin(((warpedV * 8.1 + warpedU * 0.35) + noise.fbm(warpedV * 7.4, warpedU * 7.4, 3) * 0.8) * Math.PI));
+			const rootThread = Math.pow(1 - flowA, 4.0) * 0.6 + Math.pow(1 - flowB, 4.2) * 0.7;
+			const rootClump = 0.5 + 0.5 * noise.fbm(warpedU * 7.6, warpedV * 7.6, 4);
+			const ribbonMask = clamp(rootThread * smoothstep(0.45, 0.92, rootClump) * 0.72, 0, 1);
+			const panelField = 0.5 + 0.5 * Math.sin((warpedU * (terrain.panelFrequency || 1.2)) * Math.PI * 2 + noise.fbm(warpedU * 5.4, warpedV * 5.4, 2) * 0.9);
+			const panelMix = smoothstep(0.32, 0.68, panelField);
+			const glyphScale = terrain.glyphScale || 7;
+			const bandA = Math.abs(Math.sin((warpedU * glyphScale * 0.86) * Math.PI + noise.fbm(warpedU * 9.5, warpedV * 9.5, 2) * 0.5));
+			const bandB = Math.abs(Math.sin(((warpedV + warpedU * 0.22) * glyphScale * 0.68) * Math.PI));
+			const notch = 0.5 + 0.5 * noise.fbm(warpedU * 11.2, warpedV * 11.2, 4);
+			const pocketField = 0.5 + 0.5 * noise.fbm(warpedU * 13.6 + 17.3, warpedV * 13.6 + 33.8, 4);
+			const glyphMask = Math.pow(1 - bandA, 3.4) * 0.65 + Math.pow(1 - bandB, 4.8) * 0.55;
+			const glyphVoid = clamp(glyphMask * smoothstep(0.52, 0.94, notch) * smoothstep(0.58, 0.92, pocketField), 0, 1);
+			const weaveX = 1 - smoothstep(ribbonWidth, ribbonWidth + ribbonSoftness, Math.abs(frac((warpedU + warpedV * 0.15) * 24) - 0.5));
+			const weaveY = 1 - smoothstep(ribbonWidth, ribbonWidth + ribbonSoftness, Math.abs(frac((warpedV - warpedU * 0.12) * 24) - 0.5));
+			const weaveMask = clamp((weaveX * 0.62 + weaveY * 0.38) * 0.85, 0, 1);
+
+			const worldX = (u - 0.5) * terrain.size;
+			const worldZ = (v - 0.5) * terrain.size;
+			const vent = ventCoverInfluence(noise, worldX, worldZ, terrain);
+
+			return {
+				cellEdge,
+				glyphVoid,
+				ribbonMask,
+				panelMix,
+				weaveMask,
+				ventCarve: vent.carve,
+				ventRidge: vent.ridge,
+				ventScrews: vent.screws,
+				ventSlats: vent.slats,
+				ventMask: vent.mask,
+				booleanCut: clamp(
+					cellEdge * (terrain.tessellationStrength || 1) * 0.34 +
+					glyphVoid * (terrain.glyphCarveStrength || 0.7) * 0.72 +
+					ribbonMask * 0.14 +
+					vent.carve * (terrain.ventBlend || 0.85) * 0.84,
+					0,
+					1
+				)
+			};
+		}
+
+		function makeTerrainTexture(config, size = 2048) {
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+
+			const noise = new ValueNoise(91273);
+			const {
+				baseA, baseB,
+				plaidA, plaidB, plaidC,
+				camoA, camoB, camoC,
+				wrapRed, wrapGreen, ribbon, paperLight, paperShadow
+			} = config.terrain.colors;
+
+			const a = colorToObj(baseA);
+			const b = colorToObj(baseB);
+			const pA = colorToObj(plaidA);
+			const pB = colorToObj(plaidB);
+			const pC = colorToObj(plaidC);
+			const cA = colorToObj(camoA);
+			const cB = colorToObj(camoB);
+			const cC = colorToObj(camoC);
+			const wR = colorToObj(wrapRed);
+			const wG = colorToObj(wrapGreen);
+			const rB = colorToObj(ribbon);
+			const pL = colorToObj(paperLight);
+			const pS = colorToObj(paperShadow);
+
+			const img = ctx.createImageData(size, size);
+			const data = img.data;
+			const plaidBlend = clamp(config.terrain.plaidBlend, 0, 1);
+
+			for (let y = 0; y < size; y++) {
+				for (let x = 0; x < size; x++) {
+					const i = (y * size + x) * 4;
+					const u = x / size;
+					const v = y / size;
+					const floor = floorInfluence(noise, u, v, config.terrain);
+
+					const stretchU = u + noise.fbm(u * 1.9, v * 12.2, 4) * 0.12 + noise.fbm(u * 7.8, v * 2.2, 3) * 0.05;
+					const stretchV = v + noise.fbm(v * 1.6, u * 10.8, 4) * 0.16;
+					const broad = 0.5 + 0.5 * noise.fbm(stretchU * 2.8, stretchV * 2.2, 4);
+					const fine = 0.5 + 0.5 * noise.fbm(stretchU * 24.8, stretchV * 8.6, 4);
+
+					const plaidX = Math.abs(Math.sin((u * 40 + fine * 4) * Math.PI));
+					const plaidY = Math.abs(Math.sin((v * 44 + fine * 5) * Math.PI));
+					const plaidL = Math.pow(Math.max(plaidX, plaidY), 4.2);
+					const plaidM = Math.pow(Math.max(Math.sin((u * 18) * Math.PI), Math.sin((v * 22) * Math.PI)) * 0.5 + 0.5, 2.0);
+
+					const camoMask = 0.5 + 0.5 * noise.fbm(stretchU * 10.6 + broad * 0.8, stretchV * 6.2 - broad * 0.6, 5);
+					let camoCol = cB;
+					if (camoMask < 0.35) camoCol = cA;
+					else if (camoMask > 0.72) camoCol = cC;
+
+					const baseMix = {
+						r: lerp(a.r, b.r, broad),
+						g: lerp(a.g, b.g, broad),
+						b: lerp(a.b, b.b, broad)
+					};
+
+					let plaidCol = {
+						r: lerp(pA.r, pB.r, plaidL),
+						g: lerp(pA.g, pB.g, plaidL),
+						b: lerp(pA.b, pB.b, plaidL)
+					};
+
+					plaidCol = {
+						r: lerp(plaidCol.r, pC.r, plaidM * 0.35),
+						g: lerp(plaidCol.g, pC.g, plaidM * 0.35),
+						b: lerp(plaidCol.b, pC.b, plaidM * 0.35)
+					};
+
+					const hostMask = clamp((plaidL * 0.75 + fine * 0.35) * plaidBlend + (1 - plaidBlend) * 0.4, 0, 1);
+					const terr = {
+						r: lerp(camoCol.r, plaidCol.r, hostMask),
+						g: lerp(camoCol.g, plaidCol.g, hostMask),
+						b: lerp(camoCol.b, plaidCol.b, hostMask)
+					};
+					const wrapPaperBase = mixObjColor(wR, wG, floor.panelMix * 0.46 + broad * 0.24);
+					const wovenPaper = mixObjColor(wrapPaperBase, pL, floor.weaveMask * 0.24 + fine * 0.06);
+					const typedPaper = mixObjColor(wovenPaper, pS, floor.glyphVoid * 0.38 + floor.cellEdge * 0.14);
+					const ribbonCol = mixObjColor(rB, pS, floor.weaveMask * 0.32 + broad * 0.06);
+					const wrappedTerrain = mixObjColor(terr, typedPaper, 0.82);
+					const wrappedWithRibbon = mixObjColor(wrappedTerrain, ribbonCol, floor.ribbonMask * 0.74);
+					const ventMetal = {
+						r: lerp(0.34, 0.56, broad),
+						g: lerp(0.34, 0.54, broad),
+						b: lerp(0.35, 0.57, broad)
+					};
+					const ventShaded = mixObjColor(wrappedWithRibbon, ventMetal, floor.ventMask * 0.32 + floor.ventSlats * 0.14);
+					const ventCavity = mixObjColor(ventShaded, pS, floor.ventCarve * 0.72 + floor.ventScrews * 0.24);
+					const mineralGrain = 0.5 + 0.5 * noise.fbm(stretchU * 33.2, stretchV * 9.6, 5);
+					const chalkMask = smoothstep(0.44, 0.82, noise.fbm(stretchU * 5.1 + 12.1, stretchV * 4.8 + 19.3, 4));
+					const sootMask = smoothstep(0.58, 0.9, noise.fbm(stretchU * 7.2 + 40.7, stretchV * 8.1 + 7.9, 4));
+					const rustMask = smoothstep(0.64, 0.94, noise.fbm(stretchU * 8.4 + 27.8, stretchV * 3.9 + 2.2, 4));
+					const smear = 0.5 + 0.5 * noise.fbm((stretchU + stretchV * 0.45) * 40.0, (stretchV * 0.28 - stretchU * 0.08) * 7.8, 3);
+					const mineralLight = { r: 0.78, g: 0.75, b: 0.7 };
+					const mineralDark = { r: 0.28, g: 0.27, b: 0.26 };
+					const oxidation = { r: 0.53, g: 0.42, b: 0.33 };
+					const mineralBase = mixObjColor(mineralDark, mineralLight, mineralGrain);
+					const rockyBase = mixObjColor(ventCavity, mineralBase, 0.48 + chalkMask * 0.2);
+					const oxidized = mixObjColor(rockyBase, oxidation, rustMask * 0.28 + floor.ventScrews * 0.08);
+					const stretchedRock = mixObjColor(oxidized, pS, sootMask * 0.24 + (1 - smear) * 0.16);
+
+					const final = {
+						r: lerp(baseMix.r, stretchedRock.r, 0.95),
+						g: lerp(baseMix.g, stretchedRock.g, 0.95),
+						b: lerp(baseMix.b, stretchedRock.b, 0.95)
+					};
+
+					const dirtBands = 0.5 + 0.5 * noise.fbm(stretchU * 6.4 + broad * 0.8, stretchV * 3.8 - broad * 0.4, 4);
+					const lineTint = lerp(0, 0.08, floor.cellEdge) + floor.ribbonMask * 0.03 + floor.ventRidge * 0.06;
+					const voidTint = lerp(0, -0.22, floor.glyphVoid) - floor.ventCarve * 0.34;
+					const booleanDust = floor.booleanCut * 0.035 + floor.ventMask * 0.02;
+
+					const grit = (noise.fbm(stretchU * 48.5, stretchV * 20.5, 3) * 0.5 + 0.5) * 0.11 - 0.055;
+					data[i] = clamp((final.r + lineTint * 0.58 + voidTint + booleanDust + grit - dirtBands * 0.045) * 255, 0, 255);
+					data[i + 1] = clamp((final.g + lineTint * 0.5 + voidTint * 0.9 + booleanDust * 0.8 + grit - dirtBands * 0.03) * 255, 0, 255);
+					data[i + 2] = clamp((final.b + lineTint * 0.44 + voidTint * 0.84 + booleanDust * 0.72 + grit - dirtBands * 0.015) * 255, 0, 255);
+					data[i + 3] = 255;
+				}
+			}
+
+			ctx.putImageData(img, 0, 0);
+			const texture = new THREE.CanvasTexture(canvas);
+			texture.colorSpace = THREE.SRGBColorSpace;
+			texture.wrapS = THREE.RepeatWrapping;
+			texture.wrapT = THREE.RepeatWrapping;
+			texture.anisotropy = 8;
+			texture.needsUpdate = true;
+			return texture;
+		}
+
+		function sampleReferenceHeight(terrain, u, v) {
+			if (!terrain.referenceHeight || !terrain.referenceSize) return 0;
+			const size = terrain.referenceSize;
+			const data = terrain.referenceHeight;
+			const uu = frac(u * (terrain.referenceRepeatX || 1));
+			const vv = frac(v * (terrain.referenceRepeatY || 1));
+			const x = uu * (size - 1);
+			const y = vv * (size - 1);
+			const x0 = Math.floor(x);
+			const y0 = Math.floor(y);
+			const x1 = (x0 + 1) % size;
+			const y1 = (y0 + 1) % size;
+			const tx = x - x0;
+			const ty = y - y0;
+
+			const i00 = y0 * size + x0;
+			const i10 = y0 * size + x1;
+			const i01 = y1 * size + x0;
+			const i11 = y1 * size + x1;
+
+			const a = lerp(data[i00], data[i10], tx);
+			const b = lerp(data[i01], data[i11], tx);
+			return lerp(a, b, ty);
+		}
+
+		function heightAt(noise, x, z, terrain) {
+			const s = terrain.noiseScale;
+			const warpX = noise.fbm(x * s * 0.8, z * s * 0.8, 3) * terrain.warp;
+			const warpZ = noise.fbm(z * s * 0.8, x * s * 0.8, 3) * terrain.warp;
+			const ridge = Math.abs(noise.fbm((x + warpX * 0.9) * s * 1.8, (z + warpZ * 0.9) * s * 1.8, 5));
+			const und = noise.fbm((x - warpZ * 2.8) * s * 0.5, (z + warpX * 2.1) * s * 0.5, 4);
+			const lobes = Math.max(0, noise.fbm((x + warpX * 2.2) * s * 0.92, (z - warpZ * 2.2) * s * 0.92, 4));
+			const chunks = 0.5 + 0.5 * noise.fbm((x - warpZ * 1.6) * s * 2.4, (z + warpX * 1.6) * s * 2.4, 4);
+			const u = x / terrain.size + 0.5;
+			const v = z / terrain.size + 0.5;
+			const floor = floorInfluence(noise, u, v, terrain);
+			const base = (ridge * 0.62 + und * 0.28 + Math.pow(lobes, 1.5) * 0.55 + chunks * 0.18) * terrain.heightAmplitude;
+			const carve = floor.booleanCut * terrain.heightAmplitude * 0.34;
+			const edgeLift = floor.cellEdge * terrain.heightAmplitude * 0.08;
+			const ribbonLift = floor.ribbonMask * terrain.heightAmplitude * 0.18;
+			const ventCarve = floor.ventCarve * terrain.heightAmplitude * (terrain.ventDepth || 1.15) * 0.36;
+			const ventEdgeLift = floor.ventRidge * terrain.heightAmplitude * (terrain.ventEdgeLift || 0.3) * 0.14;
+			const refRelief = (sampleReferenceHeight(terrain, u, v) - 0.5) * terrain.heightAmplitude * (terrain.referenceRelief || 0);
+			const micro = noise.fbm(x * s * 12.4, z * s * 12.4, 2) * terrain.heightAmplitude * 0.09;
+			return base - carve - ventCarve + edgeLift + ribbonLift + ventEdgeLift + micro + refRelief;
+		}
+
+		function buildTerrain(scene, config) {
+			const terrain = config.terrain;
+			const geo = new THREE.PlaneGeometry(terrain.size, terrain.size, terrain.segments, terrain.segments);
+			geo.rotateX(-Math.PI / 2);
+
+			const noise = new ValueNoise(7831);
+			const pos = geo.attributes.position;
+
+			for (let i = 0; i < pos.count; i++) {
+				const x = pos.getX(i);
+				const z = pos.getZ(i);
+				pos.setY(i, heightAt(noise, x, z, terrain));
+			}
+
+			pos.needsUpdate = true;
+			geo.computeVertexNormals();
+
+			const tex = terrain.referenceTexture ? terrain.referenceTexture.clone() : makeTerrainTexture(config);
+			tex.repeat.set(
+				terrain.referenceTexture ? (terrain.referenceRepeatX || terrain.textureScale) : terrain.textureScale,
+				terrain.referenceTexture ? (terrain.referenceRepeatY || terrain.textureScale) : terrain.textureScale
+			);
+ 			tex.needsUpdate = true;
+
+			const mat = new THREE.MeshStandardMaterial({
+				map: tex,
+				roughness: 0.9,
+				metalness: 0.05,
+				bumpMap: tex,
+				bumpScale: 1.45,
+			});
+
+			const mesh = new THREE.Mesh(geo, mat);
+			mesh.receiveShadow = true;
+			mesh.castShadow = false;
+			scene.add(mesh);
+
+			return { mesh, noise };
+		}
+
+		function ringCluster(scene, cfg) {
+			const g = new THREE.Group();
+			g.position.set(cfg.position[0], cfg.position[1], cfg.position[2]);
+			const mat = new THREE.MeshPhysicalMaterial({
+				color: '#613843',
+				roughness: 0.35,
+				metalness: 0.55,
+				clearcoat: 0.5,
+				clearcoatRoughness: 0.25
+			});
+
+			for (let i = 0; i < cfg.count; i++) {
+				const torus = new THREE.Mesh(new THREE.TorusGeometry(cfg.radius, 0.5, 20, 80), mat);
+				const angle = (i / cfg.count) * Math.PI * 2;
+				torus.position.set(Math.cos(angle) * cfg.spread, Math.sin(i * 0.8) * 0.4, Math.sin(angle) * cfg.spread);
+				torus.rotation.x = Math.PI * 0.5 + Math.sin(i * 1.4) * 0.15;
+				torus.rotation.z = angle * 0.8;
+				torus.castShadow = true;
+				torus.receiveShadow = true;
+				g.add(torus);
+			}
+
+			scene.add(g);
+		}
+
+		function boneArcs(scene, cfg) {
+			const g = new THREE.Group();
+			g.position.set(cfg.position[0], cfg.position[1], cfg.position[2]);
+			const mat = new THREE.MeshStandardMaterial({
+				color: '#d8b0a4',
+				roughness: 0.78,
+				metalness: 0.05
+			});
+
+			for (let i = 0; i < cfg.count; i++) {
+				const t = i / (cfg.count - 1);
+				const angle = lerp(-0.9, 0.9, t);
+				const h = lerp(6, cfg.height, Math.sin(t * Math.PI));
+				const cone = new THREE.Mesh(new THREE.ConeGeometry(0.45, h, 16, 1, true), mat);
+				cone.position.set(Math.sin(angle) * cfg.arcRadius, h * 0.5, Math.cos(angle) * cfg.arcRadius * 0.2);
+				cone.rotation.z = angle * 0.55;
+				cone.castShadow = true;
+				g.add(cone);
+			}
+
+			scene.add(g);
+		}
+
+		function crystalBird(scene, cfg) {
+			const g = new THREE.Group();
+			g.position.set(cfg.position[0], cfg.position[1], cfg.position[2]);
+			g.scale.setScalar(cfg.scale);
+
+			const wingMat = new THREE.MeshPhysicalMaterial({
+				color: '#6f6ac9',
+				roughness: 0.16,
+				metalness: 0.2,
+				transparent: true,
+				opacity: 0.76,
+				transmission: 0.18,
+				thickness: 1.1,
+				ior: 1.23
+			});
+
+			const coreMat = new THREE.MeshPhysicalMaterial({
+				color: '#9189ff',
+				roughness: 0.12,
+				metalness: 0.18,
+				transmission: 0.25,
+				opacity: 0.85,
+				transparent: true
+			});
+
+			const body = new THREE.Mesh(new THREE.OctahedronGeometry(1.8, 1), coreMat);
+			body.position.y = 0.8;
+			body.castShadow = true;
+			g.add(body);
+
+			const head = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), coreMat);
+			head.position.set(0, 2.4, -0.7);
+			head.castShadow = true;
+			g.add(head);
+
+			for (let side of [-1, 1]) {
+				for (let i = 0; i < 11; i++) {
+					const feather = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.9), wingMat);
+					const t = i / 10;
+					feather.position.set(side * lerp(1.6, 18, t), 0.45 - Math.pow(t, 1.5) * 1.7, -Math.pow(t, 1.2) * 2.8);
+					feather.rotation.z = side * lerp(0.15, 0.8, t);
+					feather.rotation.y = side * lerp(0.1, 0.26, t);
+					feather.castShadow = true;
+					g.add(feather);
+				}
+			}
+
+			const beak = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), new THREE.MeshStandardMaterial({ color: '#f7b33a' }));
+			beak.position.set(0, 2.1, -1.7);
+			beak.rotation.x = Math.PI * 0.5;
+			g.add(beak);
+
+			scene.add(g);
+			return g;
+		}
+
+		function disposeGroup(root) {
+			const materials = new Set();
+			root.traverse((obj) => {
+				if (obj.geometry) obj.geometry.dispose();
+				if (obj.material) {
+					if (Array.isArray(obj.material)) obj.material.forEach((m) => materials.add(m));
+					else materials.add(obj.material);
+				}
+			});
+			materials.forEach((m) => m.dispose());
+		}
+
+		function buildEmbeddedVentInstallations(scene, terrain, noise) {
+			const vents = Array.isArray(terrain.vents) ? terrain.vents : [];
+			const installations = [];
+
+			for (let i = 0; i < vents.length; i++) {
+				const vent = vents[i];
+				const cx = vent.position?.[0] || 0;
+				const cz = vent.position?.[2] || 0;
+				const rotY = ((vent.rotationDeg || 0) * Math.PI) / 180;
+				const baseY = heightAt(noise, cx, cz, terrain);
+
+				const g = new THREE.Group();
+				g.position.set(cx, baseY + 0.34, cz);
+				g.rotation.y = rotY;
+
+				const ventW = Math.max(8, vent.size?.[0] || 20);
+				const ventD = Math.max(8, vent.size?.[1] || 12);
+				const plateSize = Math.max(ventW, ventD) * 0.92;
+
+				const plateMat = new THREE.MeshStandardMaterial({ color: '#c9ab86', roughness: 0.82, metalness: 0.05 });
+				const ringMat = new THREE.MeshStandardMaterial({ color: '#ece3d2', roughness: 0.58, metalness: 0.03 });
+				const bladeMat = new THREE.MeshStandardMaterial({ color: '#b89974', roughness: 0.72, metalness: 0.06 });
+				const screwMat = new THREE.MeshStandardMaterial({ color: '#bfc3c9', roughness: 0.34, metalness: 0.72 });
+
+				const plate = new THREE.Mesh(new THREE.BoxGeometry(plateSize, 0.56, plateSize), plateMat);
+				plate.castShadow = true;
+				plate.receiveShadow = true;
+				g.add(plate);
+
+				const ringRadius = plateSize * 0.42;
+				const ring = new THREE.Mesh(new THREE.CylinderGeometry(ringRadius, ringRadius, 0.12, 48), ringMat);
+				ring.position.y = 0.3;
+				ring.castShadow = true;
+				g.add(ring);
+
+				const cavity = new THREE.Mesh(new THREE.CylinderGeometry(ringRadius * 0.92, ringRadius * 0.92, 0.1, 48), new THREE.MeshStandardMaterial({ color: '#f0e7d6', roughness: 0.42, metalness: 0.02 }));
+				cavity.position.y = 0.24;
+				g.add(cavity);
+
+				const rotor = new THREE.Group();
+				rotor.position.y = 0.28;
+				g.add(rotor);
+
+				for (let b = 0; b < 8; b++) {
+					const blade = new THREE.Mesh(new THREE.BoxGeometry(ringRadius * 0.72, 0.06, ringRadius * 0.22), bladeMat);
+					const angle = (b / 8) * Math.PI * 2;
+					const rr = ringRadius * 0.38;
+					blade.position.set(Math.cos(angle) * rr, 0.01, Math.sin(angle) * rr);
+					blade.rotation.y = angle + Math.PI * 0.24;
+					blade.rotation.x = -0.1;
+					rotor.add(blade);
+				}
+
+				const hub = new THREE.Mesh(new THREE.CylinderGeometry(ringRadius * 0.34, ringRadius * 0.34, 0.2, 30), bladeMat);
+				hub.position.y = 0.04;
+				hub.castShadow = true;
+				rotor.add(hub);
+
+				const sideOffset = plateSize * 0.72;
+				for (const side of [-1, 1]) {
+					for (let s = 0; s < 2; s++) {
+						const slit = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, plateSize * 0.86), ringMat);
+						slit.position.set(side * sideOffset + s * 0.34 * side, 0.28, 0);
+						slit.castShadow = true;
+						g.add(slit);
+					}
+				}
+
+				const sx = plateSize * 0.42;
+				const sz = plateSize * 0.42;
+				const screwPositions = [[-sx, -sz], [sx, -sz], [sx, sz], [-sx, sz]];
+				for (const p of screwPositions) {
+					const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.08, 16), screwMat);
+					screw.position.set(p[0], 0.34, p[1]);
+					screw.rotation.x = Math.PI * 0.5;
+					g.add(screw);
+				}
+
+				scene.add(g);
+				installations.push({ group: g, rotor, phase: i * 1.17, baseY: g.position.y });
+			}
+
+			return installations;
+		}
+
+		function tToSegment(path, t) {
+			const arr = path;
+			if (t <= arr[0].t) return { i: 0, lt: 0 };
+			if (t >= arr[arr.length - 1].t) return { i: arr.length - 2, lt: 1 };
+			for (let i = 0; i < arr.length - 1; i++) {
+				if (t >= arr[i].t && t <= arr[i + 1].t) {
+					const lt = (t - arr[i].t) / Math.max(1e-6, arr[i + 1].t - arr[i].t);
+					return { i, lt };
+				}
+			}
+			return { i: 0, lt: 0 };
+		}
+
+		function lerpVec3(a, b, t) {
+			return new THREE.Vector3(lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t));
+		}
+
+		async function boot() {
+			const config = loadInlineScene();
+			const biome2Reference = await loadBiome2ReferencePack();
+			const biome4Reference = await loadBiome4ReferencePack();
+			const biome2TreeAsset = await loadBiome2TreeAsset();
+			const biome2OregonAsset = await loadBiome2OregonAsset();
+			const biome2SecondBushAsset = await loadBiome2SecondBushAsset();
+			const biome4MeshAsset = await loadBiome4MeshAsset();
+			const baseTerrain = cloneObject({
+				ventBlend: config.terrain.ventBlend,
+				ventDepth: config.terrain.ventDepth,
+				ventEdgeLift: config.terrain.ventEdgeLift,
+				colors: config.terrain.colors
+			});
+
+			const renderer = new THREE.WebGLRenderer({ antialias: !!config.render.antialias, powerPreference: 'high-performance' });
+			renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, config.render.pixelRatioCap || 2));
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			renderer.outputColorSpace = THREE.SRGBColorSpace;
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			renderer.toneMappingExposure = 1.08;
+			renderer.shadowMap.enabled = true;
+			renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+			renderer.setClearColor(config.render.clearColor || '#000000', 1);
+			app.appendChild(renderer.domElement);
+
+			const scene = new THREE.Scene();
+			scene.fog = new THREE.Fog(config.atmosphere.fogColor, config.atmosphere.fogNear, config.atmosphere.fogFar);
+			const sky = createSky(config);
+			scene.add(sky);
+
+			const camera = new THREE.PerspectiveCamera(config.camera.fov, window.innerWidth / window.innerHeight, config.camera.near, config.camera.far);
+
+			const hemi = new THREE.HemisphereLight('#e7d9ca', '#2d2925', 0.56);
+			scene.add(hemi);
+
+			const sun = new THREE.DirectionalLight('#ffd7ba', 1.95);
+			sun.position.set(65, 85, 14);
+			sun.castShadow = true;
+			sun.shadow.mapSize.set(2048, 2048);
+			sun.shadow.camera.near = 1;
+			sun.shadow.camera.far = 260;
+			sun.shadow.camera.left = -90;
+			sun.shadow.camera.right = 90;
+			sun.shadow.camera.top = 90;
+			sun.shadow.camera.bottom = -90;
+			sun.shadow.bias = -0.0002;
+			scene.add(sun);
+
+			const fill = new THREE.DirectionalLight('#9ab5c2', 0.44);
+			fill.position.set(-54, 34, -38);
+			scene.add(fill);
+
+			const lowRake = new THREE.DirectionalLight('#f0e7db', 0.42);
+			lowRake.position.set(28, 10, 62);
+			scene.add(lowRake);
+
+			const biome2VegetationGroup = new THREE.Group();
+			scene.add(biome2VegetationGroup);
+			const biome4VegetationGroup = new THREE.Group();
+			scene.add(biome4VegetationGroup);
+
+			let terrainState = buildTerrain(scene, config);
+			let ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
+
+			function setSkyGradient(topHex, horizonHex) {
+				if (sky.material && sky.material.uniforms && sky.material.uniforms.topColor) {
+					sky.material.uniforms.topColor.value.set(topHex);
+					sky.material.uniforms.horizonColor.value.set(horizonHex);
+				}
+			}
+
+			function setSkyVentImprint(strength, colorHex) {
+				if (sky.material && sky.material.uniforms && sky.material.uniforms.ventImprintStrength) {
+					sky.material.uniforms.ventImprintStrength.value = strength;
+					sky.material.uniforms.ventImprintColor.value.set(colorHex);
+				}
+			}
+
+			function rebuildTerrain() {
+				while (biome2VegetationGroup.children.length > 0) {
+					const child = biome2VegetationGroup.children[0];
+					biome2VegetationGroup.remove(child);
+					if (child.material) {
+						if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+						else child.material.dispose();
+					}
+				}
+				while (biome4VegetationGroup.children.length > 0) {
+					const child = biome4VegetationGroup.children[0];
+					biome4VegetationGroup.remove(child);
+					if (child.material) {
+						if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+						else child.material.dispose();
+					}
+				}
+
+				if (ventInstallations.length > 0) {
+					ventInstallations.forEach((entry) => {
+						scene.remove(entry.group);
+						disposeGroup(entry.group);
+					});
+					ventInstallations = [];
+				}
+
+				if (terrainState && terrainState.mesh) {
+					scene.remove(terrainState.mesh);
+					terrainState.mesh.geometry.dispose();
+					if (terrainState.mesh.material.map) terrainState.mesh.material.map.dispose();
+					if (terrainState.mesh.material.bumpMap && terrainState.mesh.material.bumpMap !== terrainState.mesh.material.map) {
+						terrainState.mesh.material.bumpMap.dispose();
+					}
+					terrainState.mesh.material.dispose();
+				}
+				terrainState = buildTerrain(scene, config);
+				ventInstallations = buildEmbeddedVentInstallations(scene, config.terrain, terrainState.noise);
+
+				if (activeBiomeId === 'B02') {
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2TreeAsset, {
+						count: 160,
+						ringMinRatio: 0.42,
+						ringMaxRatio: 0.98,
+						scaleMin: 0.03,
+						scaleMax: 0.068,
+						avoidCenter: 20,
+						embedRatio: 0.34,
+						embedDepthMin: 0.35,
+						embedDepthMax: 0.9,
+						emergeLift: 0.16
+					});
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2OregonAsset, {
+						count: 320,
+						ringMinRatio: 0.22,
+						ringMaxRatio: 0.96,
+						jitter: 16,
+						scaleMin: 0.05,
+						scaleMax: 0.122,
+						avoidCenter: 10,
+						embedRatio: 0.48,
+						embedDepthMin: 0.42,
+						embedDepthMax: 1.1,
+						emergeLift: 0.09
+					});
+					buildBiome2Vegetation(biome2VegetationGroup, config.terrain, terrainState.noise, biome2SecondBushAsset, {
+						count: 220,
+						ringMinRatio: 0.3,
+						ringMaxRatio: 0.95,
+						jitter: 14,
+						scaleMin: 0.045,
+						scaleMax: 0.11,
+						avoidCenter: 12,
+						embedRatio: 0.41,
+						embedDepthMin: 0.38,
+						embedDepthMax: 1.0,
+						emergeLift: 0.12
+					});
+				}
+
+				if (activeBiomeId === 'B04') {
+					buildBiome2Vegetation(biome4VegetationGroup, config.terrain, terrainState.noise, biome4MeshAsset, {
+						count: 30,
+						ringMinRatio: 0.0,
+						ringMaxRatio: 1.0,
+						jitter: 10,
+						scaleMin: 22.0,
+						scaleMax: 56.0,
+						avoidCenter: 0,
+						embedRatio: 0.82,
+						embedDepthMin: 0.35,
+						embedDepthMax: 1.25,
+						emergeLift: 0.0,
+						materialColor: '#f0e6d3',
+						colorGain: 1.6,
+						emissive: '#5b4e3f',
+						emissiveIntensity: 0.34,
+						roughness: 0.66,
+						metalness: 0.0
+					});
+				}
+			}
+
+			function applyBiome(index) {
+				const biome = BIOMES[index] || BIOMES[0];
+				config.terrain.colors = Object.assign({}, baseTerrain.colors, biome.terrain.colors || {});
+				config.terrain.ventBlend = biome.terrain.ventBlend ?? baseTerrain.ventBlend;
+				config.terrain.ventDepth = biome.terrain.ventDepth ?? baseTerrain.ventDepth;
+				config.terrain.ventEdgeLift = biome.terrain.ventEdgeLift ?? baseTerrain.ventEdgeLift;
+
+				if (biome.id === 'B02' && biome2Reference) {
+					config.terrain.referenceTexture = biome2Reference.texture;
+					config.terrain.referenceHeight = biome2Reference.height;
+					config.terrain.referenceSize = biome2Reference.size;
+					config.terrain.referenceRepeatX = 1.5;
+					config.terrain.referenceRepeatY = 1.35;
+					config.terrain.referenceRelief = 0.72;
+				} else if (biome.id === 'B04' && biome4Reference) {
+					config.terrain.referenceTexture = biome4Reference.texture;
+					config.terrain.referenceHeight = biome4Reference.height;
+					config.terrain.referenceSize = biome4Reference.size;
+					config.terrain.referenceRepeatX = 1.2;
+					config.terrain.referenceRepeatY = 1.2;
+					config.terrain.referenceRelief = 0.82;
+				} else {
+					config.terrain.referenceTexture = null;
+					config.terrain.referenceHeight = null;
+					config.terrain.referenceSize = 0;
+					config.terrain.referenceRepeatX = 1;
+					config.terrain.referenceRepeatY = 1;
+					config.terrain.referenceRelief = 0;
+				}
+
+				scene.fog.color.set(biome.atmosphere.fogColor);
+				scene.fog.near = biome.atmosphere.fogNear;
+				scene.fog.far = biome.atmosphere.fogFar;
+				renderer.setClearColor(biome.atmosphere.clearColor, 1);
+				setSkyGradient(biome.atmosphere.skyTop, biome.atmosphere.skyHorizon);
+				setSkyVentImprint(0.0, '#ece2cf');
+
+				hemi.color.set(biome.lights.hemiSky);
+				hemi.groundColor.set(biome.lights.hemiGround);
+				hemi.intensity = biome.lights.hemiIntensity;
+				sun.color.set(biome.lights.sunColor);
+				sun.intensity = biome.lights.sunIntensity;
+				fill.color.set(biome.lights.fillColor);
+				fill.intensity = biome.lights.fillIntensity;
+				lowRake.color.set(biome.lights.rakeColor);
+				lowRake.intensity = biome.lights.rakeIntensity;
+
+				biomeButtons.forEach((btn, i) => btn.classList.toggle('active', i === index));
+				activeBiomeId = biome.id;
+				statusEl.textContent = biome.id;
+				rebuildTerrain();
+			}
+
+			config.forms.ringClusters.forEach((cluster) => ringCluster(scene, cluster));
+			boneArcs(scene, config.forms.boneArcs);
+			const bird = crystalBird(scene, config.forms.crystalBird);
+
+			const clock = new THREE.Clock();
+			const duration = config.timeline.durationSec;
+			let paused = false;
+			let tAccum = 0;
+			let activeBiomeId = 'B02';
+
+			function setStatus(text) {
+				statusEl.textContent = text;
+			}
+
+			toggleFlightBtn.addEventListener('click', () => {
+				paused = !paused;
+				toggleFlightBtn.textContent = paused ? 'PLAY' : 'PAUSE';
+				setStatus(paused ? 'STOP' : activeBiomeId);
+			});
+
+			biomeDock.addEventListener('click', (event) => {
+				const target = event.target.closest('.biome-btn');
+				if (!target) return;
+				const biomeIndex = Number(target.dataset.biome);
+				if (Number.isNaN(biomeIndex)) return;
+				applyBiome(clamp(biomeIndex, 0, BIOMES.length - 1));
+			});
+
+			applyBiome(0);
+
+			function animate() {
+				requestAnimationFrame(animate);
+
+				const dt = clock.getDelta();
+				if (!paused) tAccum += dt * (config.timeline.speed || 1);
+
+				const raw = config.timeline.loop ? ((tAccum / duration) % 1 + 1) % 1 : clamp(tAccum / duration, 0, 1);
+				const eased = 0.5 - 0.5 * Math.cos(raw * Math.PI * 2);
+
+				const seg = tToSegment(config.camera.path, eased);
+				const a = config.camera.path[seg.i];
+				const b = config.camera.path[seg.i + 1];
+				const localT = smooth(seg.lt);
+
+				const pos = lerpVec3(a.pos, b.pos, localT);
+				const look = lerpVec3(a.look, b.look, localT);
+				const bank = lerp(a.bank, b.bank, localT);
+
+				const birdNod = Math.sin(tAccum * 1.7) * 0.18;
+				camera.position.copy(pos);
+				camera.position.y += birdNod;
+				camera.lookAt(look);
+				camera.rotateZ(bank + Math.sin(tAccum * 0.9) * 0.01);
+
+				bird.rotation.y = Math.sin(tAccum * 0.35) * 0.25;
+				bird.position.y = config.forms.crystalBird.position[1] + Math.sin(tAccum * 0.6) * 0.22;
+
+				for (const ventEntry of ventInstallations) {
+					const phase = tAccum * 1.8 + ventEntry.phase;
+					ventEntry.rotor.rotation.y = phase;
+					ventEntry.group.position.y = ventEntry.baseY + Math.sin(phase * 0.7) * 0.05;
+				}
+
+				if (sky.material && sky.material.uniforms && sky.material.uniforms.skyTime) {
+					sky.material.uniforms.skyTime.value = tAccum;
+				}
+
+				renderer.render(scene, camera);
+			}
+
+			animate();
+
+			window.addEventListener('resize', () => {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			});
+		}
+
+		boot().catch((error) => {
+			console.error(error);
+		});
+	</script>
+</body>
+</html>
