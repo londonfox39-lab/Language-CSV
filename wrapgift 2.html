@@ -153,6 +153,8 @@
 	<div class="hud">
 		<div class="controls">
 			<button id="toggleFlight" class="micro">PAUSE</button>
+			<button id="exportTerrain" class="micro">EXPORT OBJ</button>
+			<button id="exportPattern" class="micro">EXPORT PATTERN OBJ</button>
 		</div>
 		<div class="status" id="status">B02</div>
 	</div>
@@ -192,6 +194,7 @@
 				"noiseScale": 0.017,
 				"warp": 2.1,
 				"textureScale": 2.1,
+				"materialStyle": "concrete",
 				"plaidBlend": 0.12,
 				"tessellationScale": 8.2,
 				"tessellationEdge": 0.11,
@@ -266,6 +269,8 @@
 		const app = document.getElementById('app');
 		const statusEl = document.getElementById('status');
 		const toggleFlightBtn = document.getElementById('toggleFlight');
+		const exportTerrainBtn = document.getElementById('exportTerrain');
+		const exportPatternBtn = document.getElementById('exportPattern');
 		const biomeDock = document.getElementById('biomeDock');
 		const biomeButtons = Array.from(document.querySelectorAll('.biome-btn'));
 
@@ -877,6 +882,210 @@
 			return JSON.parse(JSON.stringify(obj));
 		}
 
+		function downloadTextFile(filename, content) {
+			const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = filename;
+			link.style.display = 'none';
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+		}
+
+		function terrainMeshToObj(mesh, objectName = 'terrain') {
+			mesh.updateWorldMatrix(true, false);
+
+			const sourceGeometry = mesh.geometry;
+			const exportedGeometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry.clone();
+
+			const positions = exportedGeometry.getAttribute('position');
+			const normals = exportedGeometry.getAttribute('normal');
+			const uvs = exportedGeometry.getAttribute('uv');
+
+			if (!positions || positions.count < 3) {
+				if (exportedGeometry !== sourceGeometry) exportedGeometry.dispose();
+				throw new Error('Terrain geometry has no vertex positions to export.');
+			}
+
+			const world = mesh.matrixWorld;
+			const normalMatrix = new THREE.Matrix3().getNormalMatrix(world);
+			const v = new THREE.Vector3();
+			const n = new THREE.Vector3();
+
+			const lines = [
+				'# WrapGift terrain OBJ export',
+				`o ${objectName}`
+			];
+
+			for (let i = 0; i < positions.count; i++) {
+				v.fromBufferAttribute(positions, i).applyMatrix4(world);
+				lines.push(`v ${v.x.toFixed(6)} ${v.y.toFixed(6)} ${v.z.toFixed(6)}`);
+			}
+
+			if (uvs) {
+				for (let i = 0; i < uvs.count; i++) {
+					const u = uvs.getX(i);
+					const vv = uvs.getY(i);
+					lines.push(`vt ${u.toFixed(6)} ${vv.toFixed(6)}`);
+				}
+			}
+
+			if (normals) {
+				for (let i = 0; i < normals.count; i++) {
+					n.fromBufferAttribute(normals, i).applyMatrix3(normalMatrix).normalize();
+					lines.push(`vn ${n.x.toFixed(6)} ${n.y.toFixed(6)} ${n.z.toFixed(6)}`);
+				}
+			}
+
+			for (let i = 0; i < positions.count; i += 3) {
+				const a = i + 1;
+				const b = i + 2;
+				const c = i + 3;
+
+				if (uvs && normals) {
+					lines.push(`f ${a}/${a}/${a} ${b}/${b}/${b} ${c}/${c}/${c}`);
+				} else if (uvs) {
+					lines.push(`f ${a}/${a} ${b}/${b} ${c}/${c}`);
+				} else if (normals) {
+					lines.push(`f ${a}//${a} ${b}//${b} ${c}//${c}`);
+				} else {
+					lines.push(`f ${a} ${b} ${c}`);
+				}
+			}
+
+			if (exportedGeometry !== sourceGeometry) exportedGeometry.dispose();
+			return lines.join('\n');
+		}
+
+		function geometryToObjBlock(geometry, objectName, transformMatrix, state) {
+			const working = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+			if (!working.getAttribute('normal')) working.computeVertexNormals();
+			working.applyMatrix4(transformMatrix);
+
+			const positions = working.getAttribute('position');
+			const normals = working.getAttribute('normal');
+			const uvs = working.getAttribute('uv');
+
+			if (!positions || positions.count < 3) {
+				working.dispose();
+				throw new Error(`Geometry for ${objectName} has no vertices to export.`);
+			}
+
+			const lines = [`o ${objectName}`];
+			const v = new THREE.Vector3();
+			const n = new THREE.Vector3();
+
+			for (let i = 0; i < positions.count; i++) {
+				v.fromBufferAttribute(positions, i);
+				lines.push(`v ${v.x.toFixed(6)} ${v.y.toFixed(6)} ${v.z.toFixed(6)}`);
+			}
+
+			if (uvs) {
+				for (let i = 0; i < uvs.count; i++) {
+					lines.push(`vt ${uvs.getX(i).toFixed(6)} ${uvs.getY(i).toFixed(6)}`);
+				}
+			}
+
+			if (normals) {
+				for (let i = 0; i < normals.count; i++) {
+					n.fromBufferAttribute(normals, i);
+					lines.push(`vn ${n.x.toFixed(6)} ${n.y.toFixed(6)} ${n.z.toFixed(6)}`);
+				}
+			}
+
+			const vertexOffset = state.vertexOffset;
+			const uvOffset = state.uvOffset;
+			const normalOffset = state.normalOffset;
+			const faceCount = positions.count / 3;
+
+			for (let i = 0; i < faceCount; i++) {
+				const a = vertexOffset + i * 3 + 1;
+				const b = vertexOffset + i * 3 + 2;
+				const c = vertexOffset + i * 3 + 3;
+				if (uvs && normals) {
+					const ta = uvOffset + i * 3 + 1;
+					const tb = uvOffset + i * 3 + 2;
+					const tc = uvOffset + i * 3 + 3;
+					const na = normalOffset + i * 3 + 1;
+					const nb = normalOffset + i * 3 + 2;
+					const nc = normalOffset + i * 3 + 3;
+					lines.push(`f ${a}/${ta}/${na} ${b}/${tb}/${nb} ${c}/${tc}/${nc}`);
+				} else if (uvs) {
+					const ta = uvOffset + i * 3 + 1;
+					const tb = uvOffset + i * 3 + 2;
+					const tc = uvOffset + i * 3 + 3;
+					lines.push(`f ${a}/${ta} ${b}/${tb} ${c}/${tc}`);
+				} else if (normals) {
+					const na = normalOffset + i * 3 + 1;
+					const nb = normalOffset + i * 3 + 2;
+					const nc = normalOffset + i * 3 + 3;
+					lines.push(`f ${a}//${na} ${b}//${nb} ${c}//${nc}`);
+				} else {
+					lines.push(`f ${a} ${b} ${c}`);
+				}
+			}
+
+			state.vertexOffset += positions.count;
+			if (uvs) state.uvOffset += uvs.count;
+			if (normals) state.normalOffset += normals.count;
+			working.dispose();
+			return lines.join('\n');
+		}
+
+		function geometryForTessellatedExport(geometry, targetSize = 1.0) {
+			const working = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+			working.computeBoundingBox();
+			const size = new THREE.Vector3();
+			working.boundingBox.getSize(size);
+			const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+			working.center();
+			working.scale(targetSize / maxDim, targetSize / maxDim, targetSize / maxDim);
+			if (!working.getAttribute('normal')) working.computeVertexNormals();
+			return working;
+		}
+
+		function tessellatedPatternObjText(assets) {
+			const entries = [
+				{ name: 'tree', asset: assets.tree, targetSize: 12.0 },
+				{ name: 'oregon', asset: assets.oregon, targetSize: 10.0 },
+				{ name: 'bush', asset: assets.bush, targetSize: 8.0 }
+			].filter((entry) => entry.asset && entry.asset.geometry);
+
+			if (entries.length === 0) {
+				throw new Error('No OBJ assets are available for tessellated export.');
+			}
+
+			const rows = 4;
+			const cols = 4;
+			const cellSize = 18;
+			const lift = 0.0;
+			const state = { vertexOffset: 0, uvOffset: 0, normalOffset: 0 };
+			const lines = ['# WrapGift tessellated OBJ export'];
+
+			for (let row = 0; row < rows; row++) {
+				for (let col = 0; col < cols; col++) {
+					const entry = entries[(row + col) % entries.length];
+					const source = geometryForTessellatedExport(entry.asset.geometry, entry.targetSize);
+					const x = (col - (cols - 1) * 0.5) * cellSize;
+					const z = (row - (rows - 1) * 0.5) * cellSize;
+					const rotation = ((row + col) % 2 === 0 ? 0 : Math.PI * 0.5) + ((row % 3) - 1) * 0.14;
+					const scale = 1.0 + ((row * cols + col) % 3) * 0.08;
+					const transform = new THREE.Matrix4()
+						.makeRotationY(rotation)
+						.multiply(new THREE.Matrix4().makeScale(scale, scale, scale))
+						.setPosition(x, lift, z);
+
+					lines.push(geometryToObjBlock(source, `${entry.name}_${row}_${col}`, transform, state));
+					source.dispose();
+				}
+			}
+
+			return lines.join('\n');
+		}
+
 		function rotate2D(x, y, radians) {
 			const c = Math.cos(radians);
 			const s = Math.sin(radians);
@@ -1065,6 +1274,7 @@
 			const img = ctx.createImageData(size, size);
 			const data = img.data;
 			const plaidBlend = clamp(config.terrain.plaidBlend, 0, 1);
+			const isConcrete = String(config.terrain.materialStyle || '').toLowerCase() === 'concrete';
 
 			for (let y = 0; y < size; y++) {
 				for (let x = 0; x < size; x++) {
@@ -1077,6 +1287,37 @@
 					const stretchV = v + noise.fbm(v * 1.6, u * 10.8, 4) * 0.16;
 					const broad = 0.5 + 0.5 * noise.fbm(stretchU * 2.8, stretchV * 2.2, 4);
 					const fine = 0.5 + 0.5 * noise.fbm(stretchU * 24.8, stretchV * 8.6, 4);
+
+					if (isConcrete) {
+						const slab = 0.5 + 0.5 * noise.fbm(stretchU * 2.4, stretchV * 2.1, 4);
+						const pore = 0.5 + 0.5 * noise.fbm(stretchU * 18.0 + 11.0, stretchV * 18.0 + 7.0, 5);
+						const dust = 0.5 + 0.5 * noise.fbm(stretchU * 6.4 + 40.0, stretchV * 6.8 + 13.0, 3);
+						const chip = 0.5 + 0.5 * noise.fbm(stretchU * 34.0, stretchV * 34.0, 2);
+						const seam = clamp(floor.cellEdge * 1.5 + floor.ribbonMask * 0.12 + floor.glyphVoid * 0.1, 0, 1);
+						const crack = clamp(floor.booleanCut * 0.88 + floor.ventCarve * 0.36, 0, 1);
+						const panel = mixObjColor({ r: 0.74, g: 0.73, b: 0.71 }, { r: 0.45, g: 0.44, b: 0.42 }, slab * 0.78 + dust * 0.08);
+						const poreTint = lerp(-0.05, 0.06, pore);
+						const edgeShade = seam * 0.24 + crack * 0.18;
+						const chipShade = Math.pow(1 - chip, 5.2) * 0.18;
+						const mineral = {
+							r: clamp(panel.r - edgeShade - poreTint * 0.6 - chipShade + dust * 0.03, 0, 1),
+							g: clamp(panel.g - edgeShade * 0.96 - poreTint * 0.5 - chipShade * 0.82 + dust * 0.025, 0, 1),
+							b: clamp(panel.b - edgeShade * 0.9 - poreTint * 0.45 - chipShade * 0.72 + dust * 0.02, 0, 1)
+						};
+						const grout = clamp(floor.cellEdge * 0.92 + floor.ventMask * 0.18 + floor.ventScrews * 0.06, 0, 1);
+						const soot = clamp(0.5 + 0.5 * noise.fbm(stretchU * 10.2, stretchV * 10.2, 3), 0, 1);
+						const final = {
+							r: lerp(mineral.r, 0.18, grout * 0.7 + crack * 0.15) - soot * 0.015,
+							g: lerp(mineral.g, 0.19, grout * 0.65 + crack * 0.12) - soot * 0.014,
+							b: lerp(mineral.b, 0.2, grout * 0.6 + crack * 0.1) - soot * 0.012
+						};
+
+						data[i] = clamp(final.r * 255, 0, 255);
+						data[i + 1] = clamp(final.g * 255, 0, 255);
+						data[i + 2] = clamp(final.b * 255, 0, 255);
+						data[i + 3] = 255;
+						continue;
+					}
 
 					const plaidX = Math.abs(Math.sin((u * 40 + fine * 4) * Math.PI));
 					const plaidY = Math.abs(Math.sin((v * 44 + fine * 5) * Math.PI));
@@ -1724,6 +1965,47 @@
 				paused = !paused;
 				toggleFlightBtn.textContent = paused ? 'PLAY' : 'PAUSE';
 				setStatus(paused ? 'STOP' : activeBiomeId);
+			});
+
+			exportTerrainBtn.addEventListener('click', () => {
+				if (!terrainState || !terrainState.mesh) {
+					setStatus('NO TERRAIN');
+					return;
+				}
+
+				try {
+					const objectName = `terrain_${activeBiomeId.toLowerCase()}`;
+					const fileName = `wrapgift-2-${objectName}.obj`;
+					const obj = terrainMeshToObj(terrainState.mesh, objectName);
+					downloadTextFile(fileName, obj);
+					setStatus('OBJ SAVED');
+				} catch (error) {
+					console.error('OBJ export failed:', error);
+					setStatus('OBJ FAIL');
+				}
+
+				setTimeout(() => {
+					setStatus(paused ? 'STOP' : activeBiomeId);
+				}, 1200);
+			});
+
+			exportPatternBtn.addEventListener('click', () => {
+				try {
+					const obj = tessellatedPatternObjText({
+						tree: biome2TreeAsset,
+						oregon: biome2OregonAsset,
+						bush: biome2SecondBushAsset
+					});
+					downloadTextFile('wrapgift-2-tessellated-pattern.obj', obj);
+					setStatus('PATTERN SAVED');
+				} catch (error) {
+					console.error('Pattern OBJ export failed:', error);
+					setStatus('PATTERN FAIL');
+				}
+
+				setTimeout(() => {
+					setStatus(paused ? 'STOP' : activeBiomeId);
+				}, 1200);
 			});
 
 			biomeDock.addEventListener('click', (event) => {
