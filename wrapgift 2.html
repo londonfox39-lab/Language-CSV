@@ -265,6 +265,7 @@
 
 	<script type="module">
 		import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+		import { STLLoader } from 'https://unpkg.com/three@0.165.0/examples/jsm/loaders/STLLoader.js';
 
 		const app = document.getElementById('app');
 		const statusEl = document.getElementById('status');
@@ -273,6 +274,7 @@
 		const exportPatternBtn = document.getElementById('exportPattern');
 		const biomeDock = document.getElementById('biomeDock');
 		const biomeButtons = Array.from(document.querySelectorAll('.biome-btn'));
+		const stlLoader = new STLLoader();
 
 		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 		const frac = (v) => v - Math.floor(v);
@@ -715,6 +717,37 @@
 			});
 		}
 
+		async function loadStlAsset(stlPath, fallback) {
+			try {
+				const stlRes = await fetch(encodeURI(stlPath));
+				if (!stlRes.ok) return null;
+				const stlBuffer = await stlRes.arrayBuffer();
+				const geometry = stlLoader.parse(stlBuffer);
+				geometry.computeVertexNormals();
+				return {
+					geometry,
+					material: new THREE.MeshStandardMaterial({
+						color: fallback.color,
+						roughness: fallback.roughness,
+						metalness: fallback.metalness
+					})
+				};
+			} catch (error) {
+				console.warn('STL asset failed to load:', stlPath, error);
+				return null;
+			}
+		}
+
+		async function loadPatternStlAssets() {
+			const [tree, oregon, bush] = await Promise.all([
+				loadStlAsset('assets/obj file 1 .stl', { color: '#787878', roughness: 0.96, metalness: 0.0 }),
+				loadStlAsset('assets/obj 2 file .stl', { color: '#747474', roughness: 0.96, metalness: 0.0 }),
+				loadStlAsset('assets/obj file 3 .stl', { color: '#6f6f6f', roughness: 0.96, metalness: 0.0 })
+			]);
+
+			return { tree, oregon, bush };
+		}
+
 		function buildBiome2Vegetation(group, terrain, noise, asset, options = {}) {
 			if (!asset || !asset.geometry || !asset.material) return;
 
@@ -1055,15 +1088,15 @@
 			].filter((entry) => entry.asset && entry.asset.geometry);
 
 			if (entries.length === 0) {
-				throw new Error('No OBJ assets are available for tessellated export.');
+				throw new Error('No STL assets are available for tessellated export.');
 			}
 
-			const rows = 4;
-			const cols = 4;
-			const cellSize = 18;
+			const rows = 5;
+			const cols = 5;
+			const cellSize = 22;
 			const lift = 0.0;
 			const state = { vertexOffset: 0, uvOffset: 0, normalOffset: 0 };
-			const lines = ['# WrapGift tessellated OBJ export'];
+			const lines = ['# WrapGift tessellated STL pattern exported as OBJ'];
 
 			for (let row = 0; row < rows; row++) {
 				for (let col = 0; col < cols; col++) {
@@ -1071,8 +1104,8 @@
 					const source = geometryForTessellatedExport(entry.asset.geometry, entry.targetSize);
 					const x = (col - (cols - 1) * 0.5) * cellSize;
 					const z = (row - (rows - 1) * 0.5) * cellSize;
-					const rotation = ((row + col) % 2 === 0 ? 0 : Math.PI * 0.5) + ((row % 3) - 1) * 0.14;
-					const scale = 1.0 + ((row * cols + col) % 3) * 0.08;
+					const rotation = ((row + col) % 2 === 0 ? 0 : Math.PI * 0.5) + ((row % 4) - 1.5) * 0.1;
+					const scale = 0.9 + ((row * cols + col) % 4) * 0.07;
 					const transform = new THREE.Matrix4()
 						.makeRotationY(rotation)
 						.multiply(new THREE.Matrix4().makeScale(scale, scale, scale))
@@ -1720,6 +1753,7 @@
 			const biome2TreeAsset = await loadBiome2TreeAsset();
 			const biome2OregonAsset = await loadBiome2OregonAsset();
 			const biome2SecondBushAsset = await loadBiome2SecondBushAsset();
+			const patternStlAssets = await loadPatternStlAssets();
 			const biome4MeshAsset = await loadBiome4MeshAsset();
 			const baseTerrain = cloneObject({
 				ventBlend: config.terrain.ventBlend,
@@ -1992,11 +2026,11 @@
 			exportPatternBtn.addEventListener('click', () => {
 				try {
 					const obj = tessellatedPatternObjText({
-						tree: biome2TreeAsset,
-						oregon: biome2OregonAsset,
-						bush: biome2SecondBushAsset
+						tree: patternStlAssets.tree,
+						oregon: patternStlAssets.oregon,
+						bush: patternStlAssets.bush
 					});
-					downloadTextFile('wrapgift-2-tessellated-pattern.obj', obj);
+					downloadTextFile('wrapgift-2-stl-tessellated-pattern.obj', obj);
 					setStatus('PATTERN SAVED');
 				} catch (error) {
 					console.error('Pattern OBJ export failed:', error);
